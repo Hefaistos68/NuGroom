@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/NonGitFiles/">
+    <File Path="NonGitFiles/config-app-dep.json" />
+    <File Path="NonGitFiles/config-mult-dep.json" />
+    <File Path="NonGitFiles/config.json" />
+    <File Path="NonGitFiles/config0dep.json" />
+    <File Path="NonGitFiles/config1dep.json" />
+    <File Path="NonGitFiles/config2dep.json" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".github/copilot-instructions.md" />
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="NuGroom.Tests/NuGroom.Tests.csproj" />
+  <Project Path="NuGroom/NuGroom.csproj" />
+</Solution>

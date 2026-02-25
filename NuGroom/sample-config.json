@@ -1,0 +1,74 @@
+{
+    "Organization": "https://sample.visualstudio.com/",
+    "Token": "xxyyzz",
+    "MaxRepos": 500,
+    "Project": "",
+    "ResolveNuGet": true,
+    "Detailed": false,
+    "IncludeArchived": false,
+    "Feeds": [
+        {
+            "Name": "NuGet.org",
+            "Url": "https://api.nuget.org/v3/index.json"
+        }
+    ],
+    "VersionWarnings": {
+        "DefaultLevel": "Minor",
+        "PackageRules": [
+            {
+                "PackageName": "Newtonsoft.Json",
+                "Level": "Major"
+            },
+            {
+                "PackageName": "Serilog",
+                "Level": "Patch"
+            }
+        ]
+    },
+    "ExcludePrefixes": [
+        "Microsoft.",
+        "System."
+    ],
+    "ExcludePackages": [],
+    "ExcludePatterns": [],
+    "ExcludeCsprojPatterns": [
+        ".*\\.Test[s]?\\.csproj$",
+        ".*\\.UnitTests\\.csproj$",
+        ".*\\.IntegrationTests\\.csproj$"
+    ],
+    "ExcludeRepositories": [ "Legacy-.*", "Archive\\..*" ],
+    "IncludeRepositories": [ "MyApp\\..*", "Shared\\.Core" ],
+    "CaseSensitiveCsprojFilters": false,
+    "NoDefaultExclusions": false,
+    "CaseSensitive": false,
+    "ExportPackages": "nugroom-report.json",
+    "ExportWarnings": "nugroom-warnings.json",
+    "ExportRecommendations": "nugroom-recommendations.json",
+    "ExportFormat": "Json",
+    "Update": {
+        "Scope": "Patch",
+        "FeatureBranchName": "nugroom/update-nuget-references",
+        "SourceBranchPattern": "develop/*",
+        "TargetBranchPattern": "develop/*",
+        "DryRun": true,
+        "PinnedPackages": [
+            {
+                "PackageName": "Newtonsoft.Json",
+                "Version": "13.0.1",
+                "Reason": "Breaking changes in newer versions"
+            },
+            {
+                "PackageName": "Serilog",
+                "Version": null,
+                "Reason": "Keep current version until logging migration is complete"
+            }
+        ],
+        "RequiredReviewers": [
+            "reviewer1@company.com"
+        ],
+        "OptionalReviewers": [
+            "reviewer2@company.com"
+        ],
+        "TagCommits": false
+    }
+}

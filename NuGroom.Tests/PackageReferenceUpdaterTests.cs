@@ -1,0 +1,279 @@
+using NuGroom.Configuration;
+
+using Shouldly;
+
+namespace NuGroom.Tests
+{
+	[TestFixture]
+	public class PackageReferenceUpdaterTests
+	{
+		[Test]
+		public void WhenPatchUpdateWithinScopeThenIsUpdateWithinScopeReturnsTrue()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Patch);
+
+			updater.IsUpdateWithinScope("1.2.3", "1.2.5").ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenMinorUpdateWithPatchScopeThenIsUpdateWithinScopeReturnsFalse()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Patch);
+
+			updater.IsUpdateWithinScope("1.2.3", "1.3.0").ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenMajorUpdateWithPatchScopeThenIsUpdateWithinScopeReturnsFalse()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Patch);
+
+			updater.IsUpdateWithinScope("1.2.3", "2.0.0").ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenMinorUpdateWithMinorScopeThenIsUpdateWithinScopeReturnsTrue()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Minor);
+
+			updater.IsUpdateWithinScope("1.2.3", "1.4.0").ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenMajorUpdateWithMinorScopeThenIsUpdateWithinScopeReturnsFalse()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Minor);
+
+			updater.IsUpdateWithinScope("1.2.3", "2.0.0").ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenMajorUpdateWithMajorScopeThenIsUpdateWithinScopeReturnsTrue()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Major);
+
+			updater.IsUpdateWithinScope("1.2.3", "2.0.0").ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenVersionsAreEqualThenIsUpdateWithinScopeReturnsFalse()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Major);
+
+			updater.IsUpdateWithinScope("1.2.3", "1.2.3").ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenCurrentVersionIsNewerThenIsUpdateWithinScopeReturnsFalse()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Major);
+
+			updater.IsUpdateWithinScope("2.0.0", "1.2.3").ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenInvalidVersionStringThenIsUpdateWithinScopeReturnsFalse()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Major);
+
+			updater.IsUpdateWithinScope("not-a-version", "1.2.3").ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenPackageIsPinnedThenIsPinnedReturnsTrue()
+		{
+			var pinned = new List<PinnedPackage>
+			{
+				new() { PackageName = "Newtonsoft.Json", Version = "13.0.1" }
+			};
+			var updater = new PackageReferenceUpdater(UpdateScope.Patch, pinned);
+
+			updater.IsPinned("Newtonsoft.Json").ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenPackageIsNotPinnedThenIsPinnedReturnsFalse()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Patch);
+
+			updater.IsPinned("Newtonsoft.Json").ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenPinnedWithDifferentCaseThenIsPinnedReturnsTrueCaseInsensitive()
+		{
+			var pinned = new List<PinnedPackage>
+			{
+				new() { PackageName = "Newtonsoft.Json", Version = "13.0.1" }
+			};
+			var updater = new PackageReferenceUpdater(UpdateScope.Patch, pinned);
+
+			updater.IsPinned("newtonsoft.json").ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenUpdateIsWithinScopeThenGetTargetVersionReturnsLatest()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Patch);
+
+			updater.GetTargetVersion("1.2.3", "1.2.5").ShouldBe("1.2.5");
+		}
+
+		[Test]
+		public void WhenUpdateIsOutOfScopeThenGetTargetVersionReturnsNull()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Patch);
+
+			updater.GetTargetVersion("1.2.3", "2.0.0").ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenCurrentVersionIsNullThenGetTargetVersionReturnsNull()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Major);
+
+			updater.GetTargetVersion(null, "1.2.3").ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenLatestVersionIsNullThenGetTargetVersionReturnsNull()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Major);
+
+			updater.GetTargetVersion("1.2.3", null).ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenApplyUpdatesWithSingleUpdateThenReplacesVersion()
+		{
+			var csproj = """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+				    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3")
+			};
+
+			var result = PackageReferenceUpdater.ApplyUpdates(csproj, updates);
+
+			result.ShouldContain("Version=\"13.0.3\"");
+			result.ShouldNotContain("Version=\"12.0.3\"");
+		}
+
+		[Test]
+		public void WhenApplyUpdatesWithMultipleUpdatesThenReplacesAll()
+		{
+			var csproj = """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+				    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+				    <PackageReference Include="Serilog" Version="2.10.0" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3"),
+				new("Serilog", "2.10.0", "2.12.0")
+			};
+
+			var result = PackageReferenceUpdater.ApplyUpdates(csproj, updates);
+
+			result.ShouldContain("Newtonsoft.Json\" Version=\"13.0.3\"");
+			result.ShouldContain("Serilog\" Version=\"2.12.0\"");
+		}
+
+		[Test]
+		public void WhenApplyUpdatesWithEmptyListThenReturnsUnchangedContent()
+		{
+			var csproj = "<Project></Project>";
+
+			var result = PackageReferenceUpdater.ApplyUpdates(csproj, new List<PackageUpdate>());
+
+			result.ShouldBe(csproj);
+		}
+
+		[Test]
+		public void WhenApplyUpdatesWithNonMatchingPackageThenReturnsUnchangedContent()
+		{
+			var csproj = """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+				    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Serilog", "2.10.0", "2.12.0")
+			};
+
+			var result = PackageReferenceUpdater.ApplyUpdates(csproj, updates);
+
+			result.ShouldBe(csproj);
+		}
+
+		[Test]
+		public void WhenApplyUpdatesWithSingleQuotesThenReplacesVersion()
+		{
+			var csproj = """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+				    <PackageReference Include='Newtonsoft.Json' Version='12.0.3' />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3")
+			};
+
+			var result = PackageReferenceUpdater.ApplyUpdates(csproj, updates);
+
+			result.ShouldContain("Version='13.0.3'");
+		}
+
+		[Test]
+		public void WhenLatestOutOfScopeWithAvailableVersionsThenGetTargetVersionReturnsInScopeVersion()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Minor);
+			var availableVersions = new List<string> { "9.0.8", "9.0.13", "10.0.1", "10.0.3" };
+
+			updater.GetTargetVersion("9.0.8", "10.0.3", availableVersions).ShouldBe("9.0.13");
+		}
+
+		[Test]
+		public void WhenLatestOutOfScopeWithNoAvailableVersionsThenGetTargetVersionReturnsNull()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Minor);
+
+			updater.GetTargetVersion("9.0.8", "10.0.3", null).ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenLatestWithinScopeThenGetTargetVersionReturnsLatestIgnoringAvailableVersions()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Minor);
+			var availableVersions = new List<string> { "9.0.8", "9.0.13", "10.0.1", "10.0.3" };
+
+			updater.GetTargetVersion("10.0.1", "10.0.3", availableVersions).ShouldBe("10.0.3");
+		}
+
+		[Test]
+		public void WhenPatchScopeLatestOutOfScopeThenGetTargetVersionReturnsInScopePatch()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Patch);
+			var availableVersions = new List<string> { "9.0.8", "9.0.13", "9.1.0", "10.0.3" };
+
+			updater.GetTargetVersion("9.0.8", "10.0.3", availableVersions).ShouldBe("9.0.13");
+		}
+	}
+}
