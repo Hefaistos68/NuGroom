@@ -221,5 +221,120 @@ namespace NuGroom.Tests
 				File.Delete(path);
 			}
 		}
+
+		[Test]
+		public void WhenTokenUsesEnvColonSyntaxThenResolvesFromEnvironment()
+		{
+			var varName = $"NUGROOM_TEST_TOKEN_{Guid.NewGuid():N}";
+			Environment.SetEnvironmentVariable(varName, "resolved-pat-value");
+
+			try
+			{
+				var path = Path.Combine(Path.GetTempPath(), $"config-test-{Guid.NewGuid()}.json");
+				File.WriteAllText(path, $$"""
+					{
+					  "Token": "$env:{{varName}}"
+					}
+					""");
+
+				var config = ConfigLoader.Load(path);
+
+				config.Token.ShouldBe("resolved-pat-value");
+				File.Delete(path);
+			}
+			finally
+			{
+				Environment.SetEnvironmentVariable(varName, null);
+			}
+		}
+
+		[Test]
+		public void WhenTokenUsesBraceSyntaxThenResolvesFromEnvironment()
+		{
+			var varName = $"NUGROOM_TEST_TOKEN_{Guid.NewGuid():N}";
+			Environment.SetEnvironmentVariable(varName, "brace-pat-value");
+
+			try
+			{
+				var path = Path.Combine(Path.GetTempPath(), $"config-test-{Guid.NewGuid()}.json");
+				File.WriteAllText(path, $$"""
+					{
+					  "Token": "${{{varName}}}"
+					}
+					""");
+
+				var config = ConfigLoader.Load(path);
+
+				config.Token.ShouldBe("brace-pat-value");
+				File.Delete(path);
+			}
+			finally
+			{
+				Environment.SetEnvironmentVariable(varName, null);
+			}
+		}
+
+		[Test]
+		public void WhenEnvVarIsNotSetThenKeepsOriginalPlaceholder()
+		{
+			var varName = $"NUGROOM_MISSING_{Guid.NewGuid():N}";
+			var placeholder = $"$env:{varName}";
+			var path = Path.Combine(Path.GetTempPath(), $"config-test-{Guid.NewGuid()}.json");
+			File.WriteAllText(path, $$"""
+				{
+				  "Token": "{{placeholder}}"
+				}
+				""");
+
+			var config = ConfigLoader.Load(path);
+
+			config.Token.ShouldBe(placeholder);
+			File.Delete(path);
+		}
+
+		[Test]
+		public void WhenTokenIsPlainStringThenRemainsUnchanged()
+		{
+			var path = Path.Combine(Path.GetTempPath(), $"config-test-{Guid.NewGuid()}.json");
+			File.WriteAllText(path, """
+				{
+				  "Token": "plain-token-value"
+				}
+				""");
+
+			var config = ConfigLoader.Load(path);
+
+			config.Token.ShouldBe("plain-token-value");
+			File.Delete(path);
+		}
+
+		[Test]
+		public void WhenFeedAuthPatUsesEnvVarThenResolvesFromEnvironment()
+		{
+			var varName = $"NUGROOM_TEST_PAT_{Guid.NewGuid():N}";
+			Environment.SetEnvironmentVariable(varName, "feed-pat-resolved");
+
+			try
+			{
+				var path = Path.Combine(Path.GetTempPath(), $"config-test-{Guid.NewGuid()}.json");
+				File.WriteAllText(path, $$"""
+					{
+					  "FeedAuth": [
+						{ "FeedName": "MyFeed", "Username": null, "Pat": "$env:{{varName}}" }
+					  ]
+					}
+					""");
+
+				var config = ConfigLoader.Load(path);
+
+				config.FeedAuth.ShouldNotBeNull();
+				config.FeedAuth![0].Pat.ShouldBe("feed-pat-resolved");
+				File.Delete(path);
+			}
+			finally
+			{
+				Environment.SetEnvironmentVariable(varName, null);
+			}
+		}
 	}
 }

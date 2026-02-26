@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace NuGroom.Configuration
 {
@@ -187,7 +188,70 @@ namespace NuGroom.Configuration
 			};
 			var cfg = JsonSerializer.Deserialize<ToolConfig>(json, options) ?? new ToolConfig();
 
+			ResolveSecrets(cfg);
+
 			return cfg;
+		}
+
+		/// <summary>
+		/// Resolves environment variable references in sensitive config fields.
+		/// Supported syntaxes: <c>$env:VAR_NAME</c> (PowerShell-style) and <c>${VAR_NAME}</c> (shell-style).
+		/// When a field value matches one of these patterns, it is replaced with the
+		/// corresponding environment variable value. If the variable is not set the
+		/// original placeholder is kept as-is.
+		/// </summary>
+		/// <param name="config">The config whose <see cref="ToolConfig.Token"/> and <see cref="ToolConfig.FeedAuth"/> Pat values will be resolved in place.</param>
+		internal static void ResolveSecrets(ToolConfig config)
+		{
+			ArgumentNullException.ThrowIfNull(config);
+
+			config.Token = ResolveEnvironmentVariable(config.Token);
+
+			if (config.FeedAuth is { Count: > 0 })
+			{
+				for (int i = 0; i < config.FeedAuth.Count; i++)
+				{
+					var auth = config.FeedAuth[i];
+					var resolvedPat = ResolveEnvironmentVariable(auth.Pat);
+
+					if (!ReferenceEquals(resolvedPat, auth.Pat))
+					{
+						config.FeedAuth[i] = auth with { Pat = resolvedPat };
+					}
+				}
+			}
+		}
+
+		private static readonly Regex EnvVarPattern = new(
+			@"^(?:\$env:(?<name1>[A-Za-z_][A-Za-z0-9_]*))|(?:\$\{(?<name2>[A-Za-z_][A-Za-z0-9_]*)\})$",
+			RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+		/// <summary>
+		/// Resolves a single string value that may contain an environment variable reference.
+		/// Returns the environment variable value when the entire string matches
+		/// <c>$env:VAR</c> or <c>${VAR}</c>, otherwise returns the original value unchanged.
+		/// </summary>
+		/// <param name="value">The raw config value to resolve.</param>
+		/// <returns>The resolved value, or the original value if no pattern matched or the variable is not set.</returns>
+		internal static string? ResolveEnvironmentVariable(string? value)
+		{
+			if (string.IsNullOrWhiteSpace(value))
+			{
+				return value;
+			}
+
+			var match = EnvVarPattern.Match(value);
+
+			if (!match.Success)
+			{
+				return value;
+			}
+
+			var varName = match.Groups["name1"].Success
+				? match.Groups["name1"].Value
+				: match.Groups["name2"].Value;
+
+			return Environment.GetEnvironmentVariable(varName) ?? value;
 		}
 
 		/// <summary>

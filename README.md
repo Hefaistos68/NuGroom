@@ -67,6 +67,7 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
   - Load all settings from JSON config file via `--config` option
   - CLI arguments override config file values
   - Store feed credentials securely in config
+  - **Environment variable resolution** for `Token` and `FeedAuth.Pat` fields (`$env:VAR` or `${VAR}` syntax)
 - **Export Options**:
   - JSON export with detailed package information and version warnings
   - CSV export for spreadsheet analysis
@@ -507,6 +508,53 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
 - **Pat**: 
   - `"USE_CURRENT_USER"` - Use current Windows/Azure credentials (recommended for Azure DevOps)
   - `"your-pat-token"` - Explicit Personal Access Token with package read permissions
+
+### Environment Variable Resolution
+
+To avoid storing secrets directly in configuration files, the `Token` and `FeedAuth.Pat` fields support environment variable references. Two syntaxes are supported:
+
+| Syntax | Style | Example |
+|--------|-------|---------|
+| `$env:VAR_NAME` | PowerShell | `"Token": "$env:ADO_PAT"` |
+| `${VAR_NAME}` | Shell | `"Token": "${ADO_PAT}"` |
+
+When the config file is loaded, any value matching one of these patterns is replaced with the corresponding environment variable value. If the variable is not set, the original placeholder is kept as-is.
+
+**Example config using environment variables:**
+```json
+{
+  "Organization": "https://dev.azure.com/yourorg",
+  "Token": "$env:ADO_PAT",
+  "Feeds": [
+    {
+      "Name": "InternalFeed",
+      "Url": "https://pkgs.dev.azure.com/yourorg/_packaging/Feed/nuget/v3/index.json"
+    }
+  ],
+  "FeedAuth": [
+    {
+      "FeedName": "InternalFeed",
+      "Username": "",
+      "Pat": "${FEED_PAT}"
+    }
+  ]
+}
+```
+
+**Azure DevOps Pipeline example:**
+```yaml
+variables:
+  ADO_PAT: $(System.AccessToken)
+  FEED_PAT: $(System.AccessToken)
+
+steps:
+  - script: NuGroom --config settings.json
+    env:
+      ADO_PAT: $(ADO_PAT)
+      FEED_PAT: $(FEED_PAT)
+```
+
+This approach keeps secrets out of source control and works naturally with Azure DevOps pipeline variables, GitHub Actions secrets, or any CI/CD system that injects environment variables.
 
 ### VersionWarnings Object Format
 
