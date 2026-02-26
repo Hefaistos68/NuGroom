@@ -1,4 +1,5 @@
 using NuGroom.Configuration;
+using NuGroom.Nuget;
 
 using Shouldly;
 
@@ -430,6 +431,107 @@ namespace NuGroom.Tests
 			var result = PackageReferenceUpdater.ApplyPackagesConfigUpdates(pkgConfig, updates);
 
 			result.ShouldBe(pkgConfig);
+		}
+
+		[Test]
+		public void WhenApplyUpdatesWithVersionBeforeIncludeThenReplacesVersion()
+		{
+			var csproj = """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+					<PackageReference Version="12.0.3" Include="Newtonsoft.Json" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3")
+			};
+
+			var result = PackageReferenceUpdater.ApplyUpdates(csproj, updates);
+
+			result.ShouldContain("Version=\"13.0.3\"");
+			result.ShouldNotContain("Version=\"12.0.3\"");
+		}
+
+		[Test]
+		public void WhenApplyCpmUpdatesWithVersionBeforeIncludeThenReplacesVersion()
+		{
+			var props = """
+				<Project>
+				  <ItemGroup>
+					<PackageVersion Version="12.0.3" Include="Newtonsoft.Json" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3")
+			};
+
+			var result = PackageReferenceUpdater.ApplyCpmUpdates(props, updates);
+
+			result.ShouldContain("Version=\"13.0.3\"");
+			result.ShouldNotContain("Version=\"12.0.3\"");
+		}
+
+		[Test]
+		public void WhenApplyPackagesConfigUpdatesWithVersionBeforeIdThenReplacesVersion()
+		{
+			var pkgConfig = """
+				<?xml version="1.0" encoding="utf-8"?>
+				<packages>
+				  <package version="12.0.3" id="Newtonsoft.Json" targetFramework="net48" />
+				</packages>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3")
+			};
+
+			var result = PackageReferenceUpdater.ApplyPackagesConfigUpdates(pkgConfig, updates);
+
+			result.ShouldContain("version=\"13.0.3\"");
+			result.ShouldNotContain("version=\"12.0.3\"");
+		}
+
+		[Test]
+		public void WhenCpmRefsSpanMultiplePropsFilesThenBuildUpdatePlansCreatesOneFileUpdatePerPropsFile()
+		{
+			var updater = new PackageReferenceUpdater(UpdateScope.Major);
+
+			var nugetInfoA = new NuGetPackageResolver.PackageInfo(
+				"PkgA", true, null, null, null, null, null, null, null, null,
+				[], false, null, [], LatestVersion: "2.0.0");
+
+			var nugetInfoB = new NuGetPackageResolver.PackageInfo(
+				"PkgB", true, null, null, null, null, null, null, null, null,
+				[], false, null, [], LatestVersion: "3.0.0");
+
+			var references = new List<PackageReferenceExtractor.PackageReference>
+			{
+				new("PkgA", "1.0.0", "/src/ProjectA/ProjectA.csproj", "MyRepo", "ProjectA", 5,
+					PackageSourceKind.CentralPackageManagement, nugetInfoA,
+					CpmFilePath: "/Directory.Packages.props"),
+				new("PkgB", "2.0.0", "/src/sub/ProjectB/ProjectB.csproj", "MyRepo", "ProjectB", 8,
+					PackageSourceKind.CentralPackageManagement, nugetInfoB,
+					CpmFilePath: "/src/sub/Directory.Packages.props")
+			};
+
+			var plans = updater.BuildUpdatePlans(references);
+
+			plans.Count.ShouldBe(1);
+			var fileUpdates = plans[0].FileUpdates;
+			fileUpdates.Count.ShouldBe(2);
+			fileUpdates[0].ProjectPath.ShouldBe("/Directory.Packages.props");
+			fileUpdates[0].Updates.Count.ShouldBe(1);
+			fileUpdates[0].Updates[0].PackageName.ShouldBe("PkgA");
+			fileUpdates[1].ProjectPath.ShouldBe("/src/sub/Directory.Packages.props");
+			fileUpdates[1].Updates.Count.ShouldBe(1);
+			fileUpdates[1].Updates[0].PackageName.ShouldBe("PkgB");
 		}
 	}
 }

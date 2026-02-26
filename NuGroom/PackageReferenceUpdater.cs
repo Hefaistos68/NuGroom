@@ -234,8 +234,8 @@ namespace NuGroom
 
 		/// <summary>
 		/// Builds a <see cref="RepositoryUpdatePlan"/> for a single repository group.
-		/// CPM-sourced references are consolidated into a single <c>Directory.Packages.props</c>
-		/// entry; project-level and packages.config references are grouped per file.
+		/// CPM-sourced references are grouped per <c>Directory.Packages.props</c> file;
+		/// project-level and packages.config references are grouped per file.
 		/// </summary>
 		private RepositoryUpdatePlan? BuildRepositoryUpdatePlan(
 			IGrouping<string, PackageReferenceExtractor.PackageReference> repoGroup,
@@ -249,15 +249,31 @@ namespace NuGroom
 			var pkgConfigRefs = repoGroup.Where(r => r.SourceKind == PackageSourceKind.PackagesConfig).ToList();
 			var projectRefs = repoGroup.Where(r => r.SourceKind == PackageSourceKind.ProjectFile).ToList();
 
-			// Build a single FileUpdate for Directory.Packages.props from all CPM references (deduplicated by package)
+			// Build per-file updates for CPM references (grouped by Directory.Packages.props path)
 			if (cpmRefs.Count > 0)
 			{
-				var cpmUpdate = BuildCpmFileUpdate(cpmRefs, skippedNoSource, skippedPinned);
+				var cpmUpdates = cpmRefs
+					.GroupBy(r => r.CpmFilePath ?? "/Directory.Packages.props")
+					.OrderBy(g => g.Key)
+					.Select(pg => BuildCpmFileUpdate(pg.Key, pg.ToList(), skippedNoSource, skippedPinned))
+					.Where(f => f != null)
+					.Cast<FileUpdate>();
 
-				if (cpmUpdate != null)
-				{
-					fileUpdates.Add(cpmUpdate);
-				}
+				fileUpdates.AddRange(cpmUpdates);
+			}
+
+			// Build per-file updates for packages.config references (grouped by actual packages.config path)
+			if (pkgConfigRefs.Count > 0)
+			{
+				var pkgConfigUpdates = pkgConfigRefs
+					.GroupBy(r => r.PackagesConfigPath ?? r.ProjectPath)
+					.OrderBy(g => g.Key)
+					.Select(pg => BuildFileUpdate(pg.Key, pg.ToList(), skippedNoSource, skippedPinned, PackageSourceKind.PackagesConfig))
+					.Where(f => f != null)
+					.Cast<FileUpdate>()
+					.OrderBy(f => f.DependencyCount);
+
+				fileUpdates.AddRange(pkgConfigUpdates);
 			}
 
 			// Build per-file updates for packages.config references (grouped by actual packages.config path)
@@ -295,11 +311,16 @@ namespace NuGroom
 		}
 
 		/// <summary>
-		/// Consolidates CPM-sourced references into a single <see cref="FileUpdate"/>
-		/// targeting the repository's <c>Directory.Packages.props</c> file.
-		/// Duplicate packages (same package from multiple projects) are collapsed.
+		/// Builds a <see cref="FileUpdate"/> for a single <c>Directory.Packages.props</c> file.
+		/// Duplicate packages (same package referenced by multiple projects) are collapsed.
 		/// </summary>
+		/// <param name="cpmFilePath">Repository-relative path of the <c>Directory.Packages.props</c> file.</param>
+		/// <param name="cpmRefs">CPM references that belong to this props file.</param>
+		/// <param name="skippedNoSource">Tracks packages already logged as skipped due to missing source.</param>
+		/// <param name="skippedPinned">Tracks packages already logged as skipped due to pinning.</param>
+		/// <returns>A <see cref="FileUpdate"/> if any updates apply; otherwise <c>null</c>.</returns>
 		private FileUpdate? BuildCpmFileUpdate(
+			string cpmFilePath,
 			List<PackageReferenceExtractor.PackageReference> cpmRefs,
 			HashSet<string> skippedNoSource,
 			HashSet<string> skippedPinned)
@@ -356,11 +377,17 @@ namespace NuGroom
 
 			foreach (var update in updates)
 			{
-				// Replace Version attribute in PackageReference elements matching the package name
+				// Match Include before Version
 				var pattern = $@"(<PackageReference\s+[^>]*Include\s*=\s*[""']){Regex.Escape(update.PackageName)}([""'][^>]*Version\s*=\s*[""']){Regex.Escape(update.OldVersion)}([""'])";
 				var replacement = $"${{1}}{update.PackageName}${{2}}{update.NewVersion}${{3}}";
 
 				result = Regex.Replace(result, pattern, replacement, RegexOptions.IgnoreCase);
+
+				// Match Version before Include (XML attribute order is not guaranteed)
+				var reversePattern = $@"(<PackageReference\s+[^>]*Version\s*=\s*[""']){Regex.Escape(update.OldVersion)}([""'][^>]*Include\s*=\s*[""']){Regex.Escape(update.PackageName)}([""'])";
+				var reverseReplacement = $"${{1}}{update.NewVersion}${{2}}{update.PackageName}${{3}}";
+
+				result = Regex.Replace(result, reversePattern, reverseReplacement, RegexOptions.IgnoreCase);
 			}
 
 			return result;
@@ -386,10 +413,17 @@ namespace NuGroom
 
 			foreach (var update in updates)
 			{
+				// Match Include before Version
 				var pattern = $@"(<PackageVersion\s+[^>]*Include\s*=\s*[""']){Regex.Escape(update.PackageName)}([""'][^>]*Version\s*=\s*[""']){Regex.Escape(update.OldVersion)}([""'])";
 				var replacement = $"${{1}}{update.PackageName}${{2}}{update.NewVersion}${{3}}";
 
 				result = Regex.Replace(result, pattern, replacement, RegexOptions.IgnoreCase);
+
+				// Match Version before Include (XML attribute order is not guaranteed)
+				var reversePattern = $@"(<PackageVersion\s+[^>]*Version\s*=\s*[""']){Regex.Escape(update.OldVersion)}([""'][^>]*Include\s*=\s*[""']){Regex.Escape(update.PackageName)}([""'])";
+				var reverseReplacement = $"${{1}}{update.NewVersion}${{2}}{update.PackageName}${{3}}";
+
+				result = Regex.Replace(result, reversePattern, reverseReplacement, RegexOptions.IgnoreCase);
 			}
 
 			return result;
@@ -415,10 +449,17 @@ namespace NuGroom
 
 			foreach (var update in updates)
 			{
+				// Match id before version
 				var pattern = $@"(<package\s+[^>]*id\s*=\s*[""']){Regex.Escape(update.PackageName)}([""'][^>]*version\s*=\s*[""']){Regex.Escape(update.OldVersion)}([""'])";
 				var replacement = $"${{1}}{update.PackageName}${{2}}{update.NewVersion}${{3}}";
 
 				result = Regex.Replace(result, pattern, replacement, RegexOptions.IgnoreCase);
+
+				// Match version before id (XML attribute order is not guaranteed)
+				var reversePattern = $@"(<package\s+[^>]*version\s*=\s*[""']){Regex.Escape(update.OldVersion)}([""'][^>]*id\s*=\s*[""']){Regex.Escape(update.PackageName)}([""'])";
+				var reverseReplacement = $"${{1}}{update.NewVersion}${{2}}{update.PackageName}${{3}}";
+
+				result = Regex.Replace(result, reversePattern, reverseReplacement, RegexOptions.IgnoreCase);
 			}
 
 			return result;
