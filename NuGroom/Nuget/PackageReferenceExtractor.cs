@@ -37,6 +37,8 @@ namespace NuGroom.Nuget
 		/// </summary>
 		public static readonly string[] DefaultExclusionPrefixes = [];
 
+		private const string PublishedDateFormat = "yyyy-MM-dd";
+
 		/// <summary>
 		/// Package exclusion configuration.
 		/// </summary>
@@ -1052,9 +1054,20 @@ namespace NuGroom.Nuget
 				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Gray, $"  \U0001F464 Authors: {nugetInfo.Authors}");
 			}
 
-			if (nugetInfo.Published.HasValue)
+			string? publishedText = null;
+
+			if (nugetInfo.Published is DateTimeOffset publishedOffset)
 			{
-				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Gray, $"  \U0001F4C5 Published: {nugetInfo.Published.Value:yyyy-MM-dd}");
+				publishedText = publishedOffset.ToString(PublishedDateFormat);
+			}
+			else if (nugetInfo.Published is DateTime publishedDate)
+			{
+				publishedText = publishedDate.ToString(PublishedDateFormat);
+			}
+
+			if (publishedText != null)
+			{
+				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Gray, $"  \U0001F4C5 Published: {publishedText}");
 			}
 
 			if (!string.IsNullOrEmpty(nugetInfo.ProjectUrl))
