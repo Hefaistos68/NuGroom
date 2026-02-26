@@ -23,8 +23,7 @@ namespace NuGroom.Workflows
 			List<VersionWarning>? warnings = null;
 			List<PackageRecommendation>? recommendations = null;
 
-			if (parseResult.VersionWarningConfig != null &&
-				parseResult.VersionWarningConfig.DefaultLevel != VersionWarningLevel.None)
+			if (parseResult.VersionWarningConfig != null)
 			{
 				var pinnedLookup = BuildPinnedLookup(parseResult.UpdateConfig?.PinnedPackages);
 				var analyzer = new VersionWarningAnalyzer(parseResult.VersionWarningConfig, pinnedLookup);
@@ -57,15 +56,19 @@ namespace NuGroom.Workflows
 		/// </summary>
 		private static Dictionary<string, string?> BuildPinnedLookup(List<PinnedPackage>? pinnedPackages)
 		{
+			var lookup = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
 			if (pinnedPackages == null || pinnedPackages.Count == 0)
 			{
-				return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+				return lookup;
 			}
 
-			return pinnedPackages.ToDictionary(
-				p => p.PackageName,
-				p => p.Version,
-				StringComparer.OrdinalIgnoreCase);
+			foreach (var p in pinnedPackages)
+			{
+				lookup[p.PackageName] = p.Version;
+			}
+
+			return lookup;
 		}
 
 		/// <summary>

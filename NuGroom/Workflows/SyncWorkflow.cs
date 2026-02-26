@@ -93,27 +93,27 @@ namespace NuGroom.Workflows
 				}
 
 				// Get project files
-					var projectFiles = await client.GetProjectFilesAsync(repository);
+				var projectFiles = await client.GetProjectFilesAsync(repository);
 
-					if (projectFiles.Count == 0)
+				if (projectFiles.Count == 0)
+				{
+					continue;
+				}
+
+				// Check Renovate overrides — skip if this package is excluded
+				RenovateOverrides? repoRenovate = null;
+
+				if (!ignoreRenovate)
+				{
+					try
 					{
-						continue;
+						repoRenovate = await RenovateConfigReader.TryReadFromRepositoryAsync(client, repository);
 					}
-
-					// Check Renovate overrides — skip if this package is excluded
-					RenovateOverrides? repoRenovate = null;
-
-					if (!ignoreRenovate)
+					catch (Exception ex)
 					{
-						try
-						{
-							repoRenovate = await RenovateConfigReader.TryReadFromRepositoryAsync(client, repository);
-						}
-						catch (Exception ex)
-						{
-							Logger.Debug($"Failed to read Renovate config for {repository.Name}: {ex.Message}");
-						}
+						Logger.Debug($"Failed to read Renovate config for {repository.Name}: {ex.Message}");
 					}
+				}
 
 					if (repoRenovate != null && RenovateConfigReader.IsPackageExcluded(syncConfig.PackageName, repoRenovate))
 					{
@@ -287,7 +287,8 @@ namespace NuGroom.Workflows
 
 			foreach (var (projectPath, oldVersion) in updates)
 			{
-				sb.AppendLine($"| `{projectPath}` | {oldVersion} | {targetVersion} |");
+				var escapedPath = projectPath.Replace("|", "\\|");
+				sb.AppendLine($"| `{escapedPath}` | {oldVersion} | {targetVersion} |");
 			}
 
 			return sb.ToString();
@@ -304,7 +305,10 @@ namespace NuGroom.Workflows
 			{
 				foreach (var r in configOptional)
 				{
-					combined.Add(r);
+					if (!string.IsNullOrWhiteSpace(r))
+					{
+						combined.Add(r);
+					}
 				}
 			}
 
@@ -312,7 +316,10 @@ namespace NuGroom.Workflows
 			{
 				foreach (var r in renovateReviewers)
 				{
-					combined.Add(r);
+					if (!string.IsNullOrWhiteSpace(r))
+					{
+						combined.Add(r);
+					}
 				}
 			}
 

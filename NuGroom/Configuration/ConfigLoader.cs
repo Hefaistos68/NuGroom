@@ -32,6 +32,108 @@ namespace NuGroom.Configuration
 	}
 
 	/// <summary>
+	/// Represents the mutable context used when applying configuration file values to runtime arguments.
+	/// </summary>
+	public sealed class ApplyConfigContext
+	{
+		/// <summary>
+		/// Initializes a new instance of the <see cref="ApplyConfigContext"/> class with empty collections.
+		/// </summary>
+		public ApplyConfigContext()
+		{
+			Feeds                     = new List<Feed>();
+			ExcludePrefixes           = new List<string>();
+			ExcludePackages           = new List<string>();
+			ExcludePatterns           = new List<string>();
+			FeedAuth                  = new List<FeedAuth>();
+			ExcludeCsprojPatterns     = new List<string>();
+			ExcludeRepositories       = new List<string>();
+			IncludeRepositories       = new List<string>();
+		}
+
+		/// <summary>Target Azure DevOps organization.</summary>
+		public string? Organization { get; set; }
+
+		/// <summary>Authentication token.</summary>
+		public string? Token { get; set; }
+
+		/// <summary>Optional project filter.</summary>
+		public string? Project { get; set; }
+
+		/// <summary>Maximum repositories to process when set.</summary>
+		public int? MaxRepos { get; set; }
+
+		/// <summary>Whether to include archived repositories.</summary>
+		public bool? IncludeArchived { get; set; }
+
+		/// <summary>Whether to resolve NuGet metadata.</summary>
+		public bool? ResolveNuGet { get; set; }
+
+		/// <summary>Whether to show detailed output.</summary>
+		public bool? ShowDetailedInfo { get; set; }
+
+		/// <summary>Whether to disable default exclusions.</summary>
+		public bool? NoDefaultExclusions { get; set; }
+
+		/// <summary>Whether to use case-sensitive matching.</summary>
+		public bool? CaseSensitive { get; set; }
+
+		/// <summary>Destination path for package export.</summary>
+		public string? ExportPackagesPath { get; set; }
+
+		/// <summary>Destination path for warnings export.</summary>
+		public string? ExportWarningsPath { get; set; }
+
+		/// <summary>Destination path for recommendations export.</summary>
+		public string? ExportRecommendationsPath { get; set; }
+
+		/// <summary>Destination path for SBOM export.</summary>
+		public string? ExportSbomPath { get; set; }
+
+		/// <summary>Export format override.</summary>
+		public ExportFormat? ExportFormat { get; set; }
+
+		/// <summary>Named feeds to merge.</summary>
+		public List<Feed> Feeds { get; }
+
+		/// <summary>Feed authentication entries to merge.</summary>
+		public List<FeedAuth> FeedAuth { get; }
+
+		/// <summary>Repository name prefixes to exclude.</summary>
+		public List<string> ExcludePrefixes { get; }
+
+		/// <summary>Package IDs to exclude.</summary>
+		public List<string> ExcludePackages { get; }
+
+		/// <summary>Path exclusion patterns.</summary>
+		public List<string> ExcludePatterns { get; }
+
+		/// <summary>.csproj-specific exclusion patterns.</summary>
+		public List<string> ExcludeCsprojPatterns { get; }
+
+		/// <summary>Repository exclusion regex patterns.</summary>
+		public List<string> ExcludeRepositories { get; }
+
+		/// <summary>Repository inclusion regex patterns.</summary>
+		public List<string> IncludeRepositories { get; }
+
+		/// <summary>Case sensitivity for .csproj filters.</summary>
+		public bool? CaseSensitiveCsprojFilters { get; set; }
+
+		/// <summary>Version warning configuration.</summary>
+		public VersionWarningConfig? VersionWarningConfig { get; set; }
+
+		/// <summary>Update workflow configuration.</summary>
+		public UpdateConfig? UpdateConfig { get; set; }
+
+		/// <summary>Whether to skip renovate processing.</summary>
+		public bool? IgnoreRenovate { get; set; }
+
+		/// <summary>Whether to include packages.config references.</summary>
+		public bool? IncludePackagesConfig { get; set; }
+	}
+
+	/// <summary>
 	/// Represents configuration options that mirror command line arguments.
 	/// Fields left null/empty will be ignored allowing overrides from CLI.
 	/// </summary>
@@ -269,96 +371,193 @@ namespace NuGroom.Configuration
 		/// Merge config values onto parsed args (args override file).
 		/// </summary>
 		/// <param name="config">The loaded configuration object whose values will be applied.</param>
-		/// <param name="organization">Target Azure DevOps organization (may be updated).</param>
-		/// <param name="token">Authentication token (may be updated).</param>
-		/// <param name="project">Optional project filter (may be updated).</param>
-		/// <param name="maxRepos">Maximum repo limit (may be updated if default).</param>
-		/// <param name="includeArchived">Flag indicating inclusion of archived repos (may be updated).</param>
-		/// <param name="resolveNuGet">Flag indicating whether to resolve NuGet metadata (may be updated).</param>
-		/// <param name="showDetailedInfo">Flag for detailed output (may be updated).</param>
-		/// <param name="feeds">Collection of feeds to merge new entries into.</param>
-		/// <param name="excludePrefixes">Repository name prefixes to exclude (merged).</param>
-		/// <param name="excludePackages">Package IDs to exclude (merged).</param>
-		/// <param name="excludePatterns">Generic exclusion patterns (merged).</param>
-		/// <param name="noDefaultExclusions">Flag disabling default exclusions (may be updated).</param>
-		/// <param name="caseSensitive">Flag for case sensitive filtering (may be updated).</param>
-		/// <param name="exportPackagesPath">Destination path for package export (may be set).</param>
-		/// <param name="feedAuth">Authentication entries for private feeds (merged).</param>
-		/// <param name="excludeCsprojPatterns">.csproj-specific exclusion patterns (merged).</param>
-		/// <param name="caseSensitiveCsprojFilters">Flag for case sensitivity of .csproj filters (may be updated).</param>
-		/// <param name="versionWarningConfig">Version warning configuration (may be set if absent).</param>
-		public static void ApplyConfig(ToolConfig config,
-			ref string? organization,
-			ref string? token,
-			ref string? project,
-			ref int maxRepos,
-			ref bool includeArchived,
-			ref bool resolveNuGet,
-			ref bool showDetailedInfo,
-			List<Feed> feeds,
-			List<string> excludePrefixes,
-			List<string> excludePackages,
-			List<string> excludePatterns,
-			ref bool noDefaultExclusions,
-			ref bool caseSensitive,
-			ref string? exportPackagesPath,
-			List<FeedAuth> feedAuth,
-			List<string> excludeCsprojPatterns,
-			ref bool caseSensitiveCsprojFilters,
-			ref VersionWarningConfig? versionWarningConfig,
-			ref UpdateConfig? updateConfig)
+		/// <param name="context">The mutable context to populate.</param>
+		public static void ApplyConfig(ToolConfig config, ApplyConfigContext context)
 		{
-			if (config.Organization != null && organization == null) organization = config.Organization;
-			if (config.Token != null && token == null) token = config.Token;
-			if (config.Project != null && project == null) project = config.Project;
-			if (config.MaxRepos.HasValue && config.MaxRepos.Value > 0 && maxRepos == 100) maxRepos = config.MaxRepos.Value;
-			if (config.IncludeArchived.HasValue && includeArchived == false) includeArchived = config.IncludeArchived.Value;
-			if (config.ResolveNuGet.HasValue) resolveNuGet = config.ResolveNuGet.Value;
-			if (config.Detailed.HasValue) showDetailedInfo = config.Detailed.Value;
-			if (config.NoDefaultExclusions.HasValue) noDefaultExclusions = config.NoDefaultExclusions.Value;
-			if (config.CaseSensitive.HasValue) caseSensitive = config.CaseSensitive.Value;
-			if (config.CaseSensitiveProjectFilters.HasValue) caseSensitiveCsprojFilters = config.CaseSensitiveProjectFilters.Value;
-			if (config.ExcludePrefixes?.Any() == true) excludePrefixes.AddRange(config.ExcludePrefixes.Where(p => !excludePrefixes.Contains(p)));
-			if (config.ExcludePackages?.Any() == true) excludePackages.AddRange(config.ExcludePackages.Where(p => !excludePackages.Contains(p)));
-			if (config.ExcludePatterns?.Any() == true) excludePatterns.AddRange(config.ExcludePatterns.Where(p => !excludePatterns.Contains(p)));
-			if (config.ExcludeProjectPatterns?.Any() == true) excludeCsprojPatterns.AddRange(config.ExcludeProjectPatterns.Where(p => !excludeCsprojPatterns.Contains(p)));
+			ArgumentNullException.ThrowIfNull(config);
+			ArgumentNullException.ThrowIfNull(context);
 
-			// Merge named feeds
+			if (!string.IsNullOrWhiteSpace(config.Organization) && string.IsNullOrWhiteSpace(context.Organization))
+			{
+				context.Organization = config.Organization;
+			}
+
+			if (!string.IsNullOrWhiteSpace(config.Token) && string.IsNullOrWhiteSpace(context.Token))
+			{
+				context.Token = config.Token;
+			}
+
+			if (!string.IsNullOrWhiteSpace(config.Project) && string.IsNullOrWhiteSpace(context.Project))
+			{
+				context.Project = config.Project;
+			}
+
+			if (config.MaxRepos is > 0 && (!context.MaxRepos.HasValue || context.MaxRepos.Value <= 0))
+			{
+				context.MaxRepos = config.MaxRepos;
+			}
+
+			if (config.IncludeArchived.HasValue && context.IncludeArchived == null)
+			{
+				context.IncludeArchived = config.IncludeArchived.Value;
+			}
+
+			if (config.ResolveNuGet.HasValue && context.ResolveNuGet == null)
+			{
+				context.ResolveNuGet = config.ResolveNuGet.Value;
+			}
+
+			if (config.Detailed.HasValue && context.ShowDetailedInfo == null)
+			{
+				context.ShowDetailedInfo = config.Detailed.Value;
+			}
+
+			if (config.NoDefaultExclusions.HasValue && context.NoDefaultExclusions == null)
+			{
+				context.NoDefaultExclusions = config.NoDefaultExclusions.Value;
+			}
+
+			if (config.CaseSensitive.HasValue && context.CaseSensitive == null)
+			{
+				context.CaseSensitive = config.CaseSensitive.Value;
+			}
+
+			if (config.CaseSensitiveProjectFilters.HasValue && context.CaseSensitiveCsprojFilters == null)
+			{
+				context.CaseSensitiveCsprojFilters = config.CaseSensitiveProjectFilters.Value;
+			}
+
+			if (config.ExcludePrefixes?.Any() == true)
+			{
+				foreach (var prefix in config.ExcludePrefixes)
+				{
+					if (!context.ExcludePrefixes.Contains(prefix))
+					{
+						context.ExcludePrefixes.Add(prefix);
+					}
+				}
+			}
+
+			if (config.ExcludePackages?.Any() == true)
+			{
+				foreach (var package in config.ExcludePackages)
+				{
+					if (!context.ExcludePackages.Contains(package))
+					{
+						context.ExcludePackages.Add(package);
+					}
+				}
+			}
+
+			if (config.ExcludePatterns?.Any() == true)
+			{
+				foreach (var pattern in config.ExcludePatterns)
+				{
+					if (!context.ExcludePatterns.Contains(pattern))
+					{
+						context.ExcludePatterns.Add(pattern);
+					}
+				}
+			}
+
+			if (config.ExcludeProjectPatterns?.Any() == true)
+			{
+				foreach (var pattern in config.ExcludeProjectPatterns)
+				{
+					if (!context.ExcludeCsprojPatterns.Contains(pattern))
+					{
+						context.ExcludeCsprojPatterns.Add(pattern);
+					}
+				}
+			}
+
+			if (config.ExcludeRepositories?.Any() == true)
+			{
+				foreach (var pattern in config.ExcludeRepositories)
+				{
+					if (!context.ExcludeRepositories.Contains(pattern))
+					{
+						context.ExcludeRepositories.Add(pattern);
+					}
+				}
+			}
+
+			if (config.IncludeRepositories?.Any() == true)
+			{
+				foreach (var pattern in config.IncludeRepositories)
+				{
+					if (!context.IncludeRepositories.Contains(pattern))
+					{
+						context.IncludeRepositories.Add(pattern);
+					}
+				}
+			}
+
+			if (config.IgnoreRenovate.HasValue && context.IgnoreRenovate == null)
+			{
+				context.IgnoreRenovate = config.IgnoreRenovate.Value;
+			}
+
+			if (config.IncludePackagesConfig.HasValue && context.IncludePackagesConfig == null)
+			{
+				context.IncludePackagesConfig = config.IncludePackagesConfig.Value;
+			}
+
 			if (config.Feeds?.Any() == true)
 			{
 				foreach (var feed in config.Feeds)
 				{
-					if (!feeds.Any(f => f.Name.Equals(feed.Name, StringComparison.OrdinalIgnoreCase)))
+					if (!context.Feeds.Any(f => f.Name.Equals(feed.Name, StringComparison.OrdinalIgnoreCase)))
 					{
-						feeds.Add(feed);
+						context.Feeds.Add(feed);
 					}
 				}
 			}
 
-			if (config.ExportPackages != null && exportPackagesPath == null) exportPackagesPath = config.ExportPackages;
+			if (!string.IsNullOrWhiteSpace(config.ExportPackages) && string.IsNullOrWhiteSpace(context.ExportPackagesPath))
+			{
+				context.ExportPackagesPath = config.ExportPackages;
+			}
 
-			// Merge FeedAuth entries by feed name
+			if (!string.IsNullOrWhiteSpace(config.ExportWarnings) && string.IsNullOrWhiteSpace(context.ExportWarningsPath))
+			{
+				context.ExportWarningsPath = config.ExportWarnings;
+			}
+
+			if (!string.IsNullOrWhiteSpace(config.ExportRecommendations) && string.IsNullOrWhiteSpace(context.ExportRecommendationsPath))
+			{
+				context.ExportRecommendationsPath = config.ExportRecommendations;
+			}
+
+			if (!string.IsNullOrWhiteSpace(config.ExportSbom) && string.IsNullOrWhiteSpace(context.ExportSbomPath))
+			{
+				context.ExportSbomPath = config.ExportSbom;
+			}
+
+			if (config.ExportFormat.HasValue && context.ExportFormat == null)
+			{
+				context.ExportFormat = config.ExportFormat.Value;
+			}
+
 			if (config.FeedAuth?.Any() == true)
 			{
 				foreach (var auth in config.FeedAuth)
 				{
-					if (!feedAuth.Any(a => a.FeedName.Equals(auth.FeedName, StringComparison.OrdinalIgnoreCase)))
+					if (!context.FeedAuth.Any(a => a.FeedName.Equals(auth.FeedName, StringComparison.OrdinalIgnoreCase)))
 					{
-						feedAuth.Add(auth);
+						context.FeedAuth.Add(auth);
 					}
 				}
 			}
 
-			// Merge version warning config
-			if (config.VersionWarnings != null && versionWarningConfig == null)
+			if (config.VersionWarnings != null && context.VersionWarningConfig == null)
 			{
-				versionWarningConfig = config.VersionWarnings;
+				context.VersionWarningConfig = config.VersionWarnings;
 			}
 
-			// Merge update config
-			if (config.Update != null && updateConfig == null)
+			if (config.Update != null && context.UpdateConfig == null)
 			{
-				updateConfig = config.Update;
+				context.UpdateConfig = config.Update;
 			}
 		}
 	}
