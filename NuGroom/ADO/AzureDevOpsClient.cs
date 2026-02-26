@@ -273,6 +273,11 @@ namespace NuGroom.ADO
 		}
 
 		/// <summary>
+		/// Supported file names for package management files that live alongside or above project files.
+		/// </summary>
+		private static readonly string[] PackageManagementFileNames = ["Directory.Packages.props", "packages.config"];
+
+		/// <summary>
 		/// Gets all project files (.csproj, .vbproj, .fsproj) from a repository with exclusion applied before content reads.
 		/// </summary>
 		public async Task<List<GitItem>> GetProjectFilesAsync(GitRepository repository)
@@ -300,6 +305,65 @@ namespace NuGroom.ADO
 				Logger.Warning($"Could not access files in repository {repository.Name}: {ex.Message}");
 				return new List<GitItem>();
 			}
+		}
+
+		/// <summary>
+		/// Gets package management files (<c>Directory.Packages.props</c> and <c>packages.config</c>)
+		/// from a repository. These files are discovered from the same item tree used by
+		/// <see cref="GetProjectFilesAsync"/> but matched by exact file name.
+		/// </summary>
+		/// <param name="repository">The repository to scan.</param>
+		/// <param name="includePackagesConfig">
+		/// When <c>false</c>, <c>packages.config</c> files are excluded from the result.
+		/// </param>
+		/// <returns>List of matching <see cref="GitItem"/> entries.</returns>
+		public async Task<List<GitItem>> GetPackageManagementFilesAsync(
+			GitRepository repository,
+			bool includePackagesConfig = false)
+		{
+			try
+			{
+				Logger.Debug($"Getting package management files from repository: {repository.Name}");
+
+				var items = await _gitClient.GetItemsAsync(
+					repository.Id,
+					scopePath: "/",
+					recursionLevel: VersionControlRecursionType.Full);
+
+				var managementFiles = items
+					.Where(item => !item.IsFolder && IsPackageManagementFile(item.Path, includePackagesConfig))
+					.ToList();
+
+				Logger.Debug($"Found {managementFiles.Count} package management file(s) in repository {repository.Name}");
+
+				return managementFiles;
+			}
+			catch (Exception ex)
+			{
+				Logger.Warning($"Could not access package management files in repository {repository.Name}: {ex.Message}");
+
+				return new List<GitItem>();
+			}
+		}
+
+		/// <summary>
+		/// Determines whether a file path matches a known package management file name.
+		/// </summary>
+		private static bool IsPackageManagementFile(string path, bool includePackagesConfig)
+		{
+			var fileName = Path.GetFileName(path);
+
+			if (fileName.Equals("Directory.Packages.props", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (includePackagesConfig && fileName.Equals("packages.config", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			return false;
 		}
 
 		/// <summary>

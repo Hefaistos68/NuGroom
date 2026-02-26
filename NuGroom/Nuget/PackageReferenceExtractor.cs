@@ -6,6 +6,21 @@ using NuGroom.Configuration;
 namespace NuGroom.Nuget
 {
 	/// <summary>
+	/// Identifies the source format from which a package reference was extracted.
+	/// </summary>
+	public enum PackageSourceKind
+	{
+		/// <summary>SDK-style project file with inline <c>&lt;PackageReference&gt;</c> elements.</summary>
+		ProjectFile,
+
+		/// <summary>Central Package Management via <c>Directory.Packages.props</c>.</summary>
+		CentralPackageManagement,
+
+		/// <summary>Legacy <c>packages.config</c> file.</summary>
+		PackagesConfig
+	}
+
+	/// <summary>
 	/// Extracts, filters and formats <c>PackageReference</c> entries from project files (.csproj, .vbproj, .fsproj), including optional NuGet metadata resolution.
 	/// </summary>
 	public class PackageReferenceExtractor
@@ -205,6 +220,7 @@ namespace NuGroom.Nuget
 		/// <param name="RepositoryName">Repository the project belongs to.</param>
 		/// <param name="ProjectName">Logical project name.</param>
 		/// <param name="LineNumber">Approximate line number where the reference appears.</param>
+		/// <param name="SourceKind">Identifies the format from which this reference was extracted.</param>
 		/// <param name="NuGetInfo">Resolved NuGet metadata (optional).</param>
 		public record PackageReference(
 			string PackageName,
@@ -213,6 +229,7 @@ namespace NuGroom.Nuget
 			string RepositoryName,
 			string ProjectName,
 			int LineNumber,
+			PackageSourceKind SourceKind = PackageSourceKind.ProjectFile,
 			NuGetPackageResolver.PackageInfo? NuGetInfo = null);
 
 		/// <summary>

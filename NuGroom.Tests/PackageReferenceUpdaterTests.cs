@@ -275,5 +275,161 @@ namespace NuGroom.Tests
 
 			updater.GetTargetVersion("9.0.8", "10.0.3", availableVersions).ShouldBe("9.0.13");
 		}
+
+		[Test]
+		public void WhenApplyCpmUpdatesWithSingleUpdateThenReplacesPackageVersion()
+		{
+			var props = """
+				<Project>
+				  <ItemGroup>
+					<PackageVersion Include="Newtonsoft.Json" Version="12.0.3" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3")
+			};
+
+			var result = PackageReferenceUpdater.ApplyCpmUpdates(props, updates);
+
+			result.ShouldContain("Version=\"13.0.3\"");
+			result.ShouldNotContain("Version=\"12.0.3\"");
+		}
+
+		[Test]
+		public void WhenApplyCpmUpdatesWithMultipleUpdatesThenReplacesAll()
+		{
+			var props = """
+				<Project>
+				  <ItemGroup>
+					<PackageVersion Include="Newtonsoft.Json" Version="12.0.3" />
+					<PackageVersion Include="Serilog" Version="2.10.0" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3"),
+				new("Serilog", "2.10.0", "3.1.1")
+			};
+
+			var result = PackageReferenceUpdater.ApplyCpmUpdates(props, updates);
+
+			result.ShouldContain("Newtonsoft.Json\" Version=\"13.0.3\"");
+			result.ShouldContain("Serilog\" Version=\"3.1.1\"");
+		}
+
+		[Test]
+		public void WhenApplyCpmUpdatesWithEmptyListThenReturnsUnchangedContent()
+		{
+			var props = "<Project></Project>";
+
+			var result = PackageReferenceUpdater.ApplyCpmUpdates(props, new List<PackageUpdate>());
+
+			result.ShouldBe(props);
+		}
+
+		[Test]
+		public void WhenApplyCpmUpdatesDoesNotAffectPackageReferenceElements()
+		{
+			var props = """
+				<Project>
+				  <ItemGroup>
+					<PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+					<PackageVersion Include="Serilog" Version="2.10.0" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3"),
+				new("Serilog", "2.10.0", "3.1.1")
+			};
+
+			var result = PackageReferenceUpdater.ApplyCpmUpdates(props, updates);
+
+			// PackageVersion for Serilog should be updated
+			result.ShouldContain("Serilog\" Version=\"3.1.1\"");
+			// PackageReference for Newtonsoft.Json should NOT be updated by ApplyCpmUpdates
+			result.ShouldContain("<PackageReference Include=\"Newtonsoft.Json\" Version=\"12.0.3\"");
+		}
+
+		[Test]
+		public void WhenApplyPackagesConfigUpdatesWithSingleUpdateThenReplacesVersion()
+		{
+			var pkgConfig = """
+				<?xml version="1.0" encoding="utf-8"?>
+				<packages>
+				  <package id="Newtonsoft.Json" version="12.0.3" targetFramework="net48" />
+				</packages>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3")
+			};
+
+			var result = PackageReferenceUpdater.ApplyPackagesConfigUpdates(pkgConfig, updates);
+
+			result.ShouldContain("version=\"13.0.3\"");
+			result.ShouldNotContain("version=\"12.0.3\"");
+		}
+
+		[Test]
+		public void WhenApplyPackagesConfigUpdatesWithMultipleUpdatesThenReplacesAll()
+		{
+			var pkgConfig = """
+				<?xml version="1.0" encoding="utf-8"?>
+				<packages>
+				  <package id="Newtonsoft.Json" version="12.0.3" targetFramework="net48" />
+				  <package id="Serilog" version="2.10.0" targetFramework="net48" />
+				</packages>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Newtonsoft.Json", "12.0.3", "13.0.3"),
+				new("Serilog", "2.10.0", "3.1.1")
+			};
+
+			var result = PackageReferenceUpdater.ApplyPackagesConfigUpdates(pkgConfig, updates);
+
+			result.ShouldContain("Newtonsoft.Json\" version=\"13.0.3\"");
+			result.ShouldContain("Serilog\" version=\"3.1.1\"");
+		}
+
+		[Test]
+		public void WhenApplyPackagesConfigUpdatesWithEmptyListThenReturnsUnchangedContent()
+		{
+			var pkgConfig = "<packages></packages>";
+
+			var result = PackageReferenceUpdater.ApplyPackagesConfigUpdates(pkgConfig, new List<PackageUpdate>());
+
+			result.ShouldBe(pkgConfig);
+		}
+
+		[Test]
+		public void WhenApplyPackagesConfigUpdatesWithNonMatchingPackageThenReturnsUnchangedContent()
+		{
+			var pkgConfig = """
+				<?xml version="1.0" encoding="utf-8"?>
+				<packages>
+				  <package id="Newtonsoft.Json" version="12.0.3" targetFramework="net48" />
+				</packages>
+				""";
+
+			var updates = new List<PackageUpdate>
+			{
+				new("Serilog", "2.10.0", "3.1.1")
+			};
+
+			var result = PackageReferenceUpdater.ApplyPackagesConfigUpdates(pkgConfig, updates);
+
+			result.ShouldBe(pkgConfig);
+		}
 	}
 }

@@ -19,7 +19,8 @@ namespace NuGroom.Workflows
 		List<FeedAuth> FeedAuth,
 		VersionWarningConfig? VersionWarningConfig,
 		bool IgnoreRenovate,
-		List<PinnedPackage>? PinnedPackages = null)
+		List<PinnedPackage>? PinnedPackages = null,
+		bool IncludePackagesConfig = false)
 	{
 		/// <summary>
 		/// Creates a <see cref="ScanOptions"/> from a validated <see cref="ParseResult"/>.
@@ -39,7 +40,8 @@ namespace NuGroom.Workflows
 				result.FeedAuth,
 				result.VersionWarningConfig,
 				result.IgnoreRenovate,
-				result.UpdateConfig?.PinnedPackages);
+				result.UpdateConfig?.PinnedPackages,
+				result.IncludePackagesConfig);
 		}
 
 		/// <summary>
@@ -125,7 +127,8 @@ namespace NuGroom.Workflows
 		}
 
 		/// <summary>
-		/// Scans a single repository: reads Renovate config, enumerates project files, and extracts package references.
+		/// Scans a single repository: reads Renovate config, enumerates project files,
+		/// discovers CPM and packages.config files, and extracts package references.
 		/// </summary>
 		private static async Task ScanRepositoryAsync(
 			AzureDevOpsClient client, PackageReferenceExtractor extractor,
@@ -147,11 +150,23 @@ namespace NuGroom.Workflows
 
 				ConsoleWriter.Out.WriteLine($"  Found {projectFiles.Count} project file(s)");
 
+				// Discover CPM and packages.config files
+				var managementFiles = await client.GetPackageManagementFilesAsync(repository, options.IncludePackagesConfig);
+				var cpmResult = await TryReadCpmAsync(client, repository, managementFiles);
+				var projectFilePaths = projectFiles.Select(f => f.Path).ToList();
+
 				foreach (var projectFile in projectFiles)
 				{
 					try
 					{
 						var refs = await ProcessProjectFileAsync(client, extractor, repository, projectFile, repoRenovate);
+
+						// Merge CPM versions when Directory.Packages.props is present
+						if (cpmResult != null && cpmResult.ManagePackageVersionsCentrally)
+						{
+							refs = CpmPackageExtractor.MergeCpmVersions(refs, cpmResult.PackageVersions);
+						}
+
 						context.TempPackageReferences.AddRange(refs);
 
 						if (refs.Count > 0)
@@ -164,10 +179,108 @@ namespace NuGroom.Workflows
 						ConsoleWriter.Out.WriteLine($"      Warning: Failed to process {projectFile.Path}: {ex.Message}");
 					}
 				}
+
+				// Process packages.config files (opt-in via --include-packages-config)
+				if (options.IncludePackagesConfig)
+				{
+					await ProcessPackagesConfigFilesAsync(client, repository, managementFiles, projectFilePaths, extractor, repoRenovate, context);
+				}
 			}
 			catch (Exception ex)
 			{
 				ConsoleWriter.Out.WriteLine($"  Warning: Failed to scan repository {repository.Name}: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Reads and parses <c>Directory.Packages.props</c> from the management files if present.
+		/// </summary>
+		private static async Task<CpmPackageExtractor.CpmParseResult?> TryReadCpmAsync(
+			AzureDevOpsClient client, GitRepository repository,
+			List<Microsoft.TeamFoundation.SourceControl.WebApi.GitItem> managementFiles)
+		{
+			var cpmFile = managementFiles.FirstOrDefault(f =>
+				Path.GetFileName(f.Path).Equals("Directory.Packages.props", StringComparison.OrdinalIgnoreCase));
+
+			if (cpmFile == null)
+			{
+				return null;
+			}
+
+			var content = await client.GetFileContentAsync(repository, cpmFile);
+
+			if (string.IsNullOrWhiteSpace(content))
+			{
+				return null;
+			}
+
+			var result = CpmPackageExtractor.Parse(content);
+
+			if (result.ManagePackageVersionsCentrally)
+			{
+				ConsoleWriter.Out.WriteLine($"  CPM detected ({result.PackageVersions.Count} centrally managed package(s))");
+			}
+
+			return result;
+		}
+
+		/// <summary>
+		/// Processes all <c>packages.config</c> files found in the repository,
+		/// associating each with its co-located project file.
+		/// </summary>
+		private static async Task ProcessPackagesConfigFilesAsync(
+			AzureDevOpsClient client, GitRepository repository,
+			List<Microsoft.TeamFoundation.SourceControl.WebApi.GitItem> managementFiles,
+			List<string> projectFilePaths, PackageReferenceExtractor extractor,
+			RenovateOverrides? repoRenovate, ScanContext context)
+		{
+			var pkgConfigFiles = managementFiles
+				.Where(f => Path.GetFileName(f.Path).Equals("packages.config", StringComparison.OrdinalIgnoreCase))
+				.ToList();
+
+			foreach (var pkgConfigFile in pkgConfigFiles)
+			{
+				try
+				{
+					var associatedProject = PackagesConfigExtractor.FindColocatedProjectFile(pkgConfigFile.Path, projectFilePaths);
+
+					if (associatedProject == null)
+					{
+						Logger.Debug($"packages.config at {pkgConfigFile.Path} has no co-located project file, skipping");
+						continue;
+					}
+
+					var content = await client.GetFileContentAsync(repository, pkgConfigFile);
+					var refs = PackagesConfigExtractor.Extract(
+						content,
+						repository.Name,
+						associatedProject,
+						repository.ProjectReference?.Name ?? "Unknown",
+						extractor.GetExclusionList());
+
+					if (repoRenovate != null)
+					{
+						refs = ApplyRenovateFiltering(refs, repoRenovate, pkgConfigFile.Path);
+					}
+
+					// Avoid duplicates: skip packages already extracted from the project file
+					var existingPackages = context.TempPackageReferences
+						.Where(r => r.ProjectPath == associatedProject)
+						.Select(r => r.PackageName)
+						.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+					var newRefs = refs.Where(r => !existingPackages.Contains(r.PackageName)).ToList();
+
+					if (newRefs.Count > 0)
+					{
+						context.TempPackageReferences.AddRange(newRefs);
+						ConsoleWriter.Out.WriteLine($"    packages.config: {newRefs.Count} additional package(s) for {associatedProject}");
+					}
+				}
+				catch (Exception ex)
+				{
+					ConsoleWriter.Out.WriteLine($"      Warning: Failed to process {pkgConfigFile.Path}: {ex.Message}");
+				}
 			}
 		}
 

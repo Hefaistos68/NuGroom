@@ -12,6 +12,16 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
   - Case-sensitive or case-insensitive matching
   - Pre-configured patterns for common test project types
 - Extracts PackageReference entries using XML parsing with regex fallback
+- **Central Package Management (CPM) Support**:
+  - Automatically detects `Directory.Packages.props` files in repositories
+  - Reads `<PackageVersion>` elements for centrally managed versions
+  - Merges CPM versions into project references that omit inline `Version` attributes
+  - Respects `VersionOverride` in individual project files
+  - Updates target `Directory.Packages.props` instead of individual project files
+- **Legacy packages.config Support** (opt-in):
+  - Parses `<package id="..." version="..."/>` entries from `packages.config` files
+  - Associates each `packages.config` with its co-located project file
+  - Enabled via `--include-packages-config` flag or config file
 - **NuGet Package Resolution (multi-feed with authentication)**:
   - Automatically resolves package metadata from one or more NuGet feeds
   - Supports multiple feeds via repeated `--feed` arguments (defaults to NuGet.org)
@@ -200,6 +210,11 @@ NuGroom --config settings.json --sync Newtonsoft.Json 13.0.1 --dry-run
 NuGroom --config settings.json --exclude-project ".*\.Test[s]?\.csproj$"
 ```
 
+### Include Legacy packages.config Projects
+```bash
+NuGroom --config settings.json --include-packages-config
+```
+
 ### Exclude Repositories by Name Pattern
 ```bash
 NuGroom --config settings.json --exclude-repo "Legacy-.*" --exclude-repo "Archive\..*"
@@ -229,6 +244,7 @@ NuGroom -o "https://dev.azure.com/yourorg" -t "your-token" \
 | `--project` | `-p` | Specific project name to search (searches all if not specified) |
 | `--max-repos` | `-m` | Maximum repositories to process (default: 100) |
 | `--include-archived` | `-a` | Include archived repositories (default: false) |
+| `--include-packages-config` | | Also scan legacy `packages.config` files (default: false) |
 
 ### Resolution Options
 | Option | Description | Example |
@@ -491,6 +507,7 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
 | `ExportFormat` | string | Format for all exports: `Json` or `Csv` | No (default: `Json`) |
 | `ExportSbom` | string | SPDX 3.0.0 SBOM export path (always JSON-LD) | No |
 | `IgnoreRenovate` | bool | Skip reading `renovate.json` from repositories | No (default: false) |
+| `IncludePackagesConfig` | bool | Also scan legacy `packages.config` files | No (default: false) |
 
 ### Feed Object Format
 
@@ -698,6 +715,52 @@ Exclude specific project files from analysis using regex patterns:
   "CaseSensitiveProjectFilters": true
 }
 ```
+
+## Central Package Management (CPM)
+
+The tool automatically detects and supports [Central Package Management](https://learn.microsoft.com/nuget/consume-packages/central-package-management) in scanned repositories.
+
+### How It Works
+
+1. When scanning a repository, the tool looks for `Directory.Packages.props` files
+2. If the file contains `<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>`, CPM is active
+3. All `<PackageVersion Include="..." Version="..."/>` entries are read into a version lookup
+4. Project files with `<PackageReference>` entries that omit a `Version` attribute have their versions populated from the CPM lookup
+5. If a project file specifies `VersionOverride`, that version takes precedence over the central version
+
+### Auto-Update Behavior
+
+When CPM is active, package version updates target `Directory.Packages.props` instead of individual project files. This means a single update to the central props file can update the version for all projects in the repository.
+
+No configuration is needed — CPM detection is automatic.
+
+## Legacy packages.config Support
+
+For repositories that still use the legacy `packages.config` format (common in .NET Framework projects), the tool can optionally scan and extract package references from these files.
+
+### Enabling
+
+Legacy `packages.config` scanning is opt-in to avoid noise in modern codebases:
+
+**CLI:**
+```bash
+NuGroom --config settings.json --include-packages-config
+```
+
+**Config file:**
+```json
+{
+  "IncludePackagesConfig": true
+}
+```
+
+### How It Works
+
+1. The tool discovers `packages.config` files in the repository
+2. Each file is associated with the co-located project file (`.csproj`, `.vbproj`, or `.fsproj` in the same directory)
+3. `<package id="..." version="..."/>` entries are extracted and tagged as `PackagesConfig` source kind
+4. Exclusion rules (prefix, exact, pattern) apply as usual
+5. Packages already discovered via `<PackageReference>` in the same project are deduplicated
 
 ## Multi-Feed Resolution
 

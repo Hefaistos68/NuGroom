@@ -23,7 +23,8 @@ namespace NuGroom
 		List<FeedAuth> FeedAuth,
 		VersionWarningConfig? VersionWarningConfig,
 		UpdateConfig? UpdateConfig,
-		List<SyncConfig> SyncConfigs);
+		List<SyncConfig> SyncConfigs,
+		bool IncludePackagesConfig = false);
 
 	/// <summary>
 	/// Parses and validates command line arguments and optional configuration files
