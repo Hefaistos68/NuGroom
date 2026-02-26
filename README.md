@@ -45,6 +45,7 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
   - Filter updates to only packages with source code in scanned repositories
   - Projects ordered by dependency count (fewest first) within each repository
   - Optional lightweight git tagging of feature branch commits
+  - Skip repositories with existing open NuGroom PRs (`--no-incremental-prs`)
 - **Package Sync**:
   - Sync a specific package to an exact version across all repositories with a single command
   - Supports both upgrades and downgrades
@@ -150,6 +151,11 @@ NuGroom --config settings.json --update-references --update-scope Minor
 ### Update and Tag Commits
 ```bash
 NuGroom --config settings.json --update-references --tag-commits
+```
+
+### Skip Repositories with Existing NuGroom PRs
+```bash
+NuGroom --config settings.json --update-references --no-incremental-prs
 ```
 
 ### Update Only Internal Packages
@@ -273,6 +279,7 @@ NuGroom -o "https://dev.azure.com/yourorg" -t "your-token" \
 | `--required-reviewer <email>` | Add a required PR reviewer (repeatable, must approve) | |
 | `--optional-reviewer <email>` | Add an optional PR reviewer (repeatable, notified only) | |
 | `--tag-commits` | Create a lightweight git tag on the feature branch commit | |
+| `--no-incremental-prs` | Skip repos that already have open NuGroom PRs (warns and skips) | |
 | `--ignore-renovate` | Skip reading `renovate.json` from repositories | |
 
 ### Sync Options
@@ -441,7 +448,8 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
     ],
     "RequiredReviewers": ["lead@company.com"],
     "OptionalReviewers": ["teammate@company.com"],
-    "TagCommits": false
+    "TagCommits": false,
+    "NoIncrementalPrs": false
   }
 }
 ```
@@ -926,6 +934,7 @@ Or via CLI (both are repeatable):
 | `RequiredReviewers` | string[]? | Email addresses or unique names of required PR reviewers | `null` |
 | `OptionalReviewers` | string[]? | Email addresses or unique names of optional PR reviewers | `null` |
 | `TagCommits` | bool | Create a lightweight git tag on each feature branch commit | `false` |
+| `NoIncrementalPrs` | bool | Skip repositories that already have open NuGroom PRs | `false` |
 
 ### PinnedPackage Object Format
 

@@ -70,6 +70,7 @@ namespace NuGroom
 			public bool SourceBranchExplicit { get; set; }
 			public bool TargetBranchExplicit { get; set; }
 			public bool SourcePackagesOnlyExplicit { get; set; }
+			public bool NoIncrementalPrsExplicit { get; set; }
 			public List<SyncConfig> SyncConfigs { get; } = new();
 		}
 
@@ -421,6 +422,11 @@ namespace NuGroom
 						state.UpdateConfig.TagCommits = true;
 						state.TagCommitsExplicit = true;
 						break;
+					case "--no-incremental-prs":
+						state.UpdateConfig ??= new UpdateConfig();
+						state.UpdateConfig.NoIncrementalPrs = true;
+						state.NoIncrementalPrsExplicit = true;
+						break;
 					case "--ignore-renovate":
 						state.IgnoreRenovate = true;
 						break;
@@ -654,6 +660,11 @@ namespace NuGroom
 				{
 					state.UpdateConfig.SourcePackagesOnly = fileConfig.Update.SourcePackagesOnly;
 				}
+
+				if (!state.NoIncrementalPrsExplicit)
+				{
+					state.UpdateConfig.NoIncrementalPrs = fileConfig.Update.NoIncrementalPrs;
+				}
 			}
 
 			// Merge list-based settings (additive from config file)
@@ -879,6 +890,7 @@ namespace NuGroom
 			Console.WriteLine("  --required-reviewer <email>  Add a required PR reviewer (repeatable, must approve)");
 			Console.WriteLine("  --optional-reviewer <email>  Add an optional PR reviewer (repeatable, notified only)");
 			Console.WriteLine("  --tag-commits                Create a lightweight git tag on the feature branch commit");
+			Console.WriteLine("  --no-incremental-prs         Skip repos that already have open NuGroom PRs (exit with warning)");
 			Console.WriteLine("  --ignore-renovate            Skip reading renovate.json from repositories");
 			Console.WriteLine();
 			Console.WriteLine("Sync Options:");

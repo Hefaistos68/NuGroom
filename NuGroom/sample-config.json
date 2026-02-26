@@ -69,6 +69,7 @@
         "OptionalReviewers": [
             "reviewer2@company.com"
         ],
-        "TagCommits": false
+        "TagCommits": false,
+        "NoIncrementalPrs": false
     }
 }

@@ -189,6 +189,12 @@ namespace NuGroom.Configuration
 		public bool TagCommits { get; set; }
 
 		/// <summary>
+		/// If true, skip creating update PRs for repositories that already have open NuGroom PRs.
+		/// When an existing open PR is detected, a warning is printed and the repository is skipped.
+		/// </summary>
+		public bool NoIncrementalPrs { get; set; }
+
+		/// <summary>
 		/// Validates that no identity appears in both required and optional reviewer lists.
 		/// </summary>
 		/// <exception cref="InvalidOperationException">Thrown when the same identity is in both lists.</exception>

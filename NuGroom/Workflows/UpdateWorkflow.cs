@@ -75,6 +75,28 @@ namespace NuGroom.Workflows
 		{
 			ConsoleWriter.Out.WriteLine($"\nProcessing updates for repository: {plan.RepositoryName}");
 
+			// Check for existing open NuGroom PRs when --no-incremental-prs is set
+			if (updateConfig.NoIncrementalPrs)
+			{
+				var openPrs = await client.GetOpenPullRequestsByBranchPrefixAsync(repository, updateConfig.FeatureBranchName);
+
+				if (openPrs.Count > 0)
+				{
+					ConsoleWriter.Out.Yellow()
+						.WriteLine($"  Warning: Repository '{plan.RepositoryName}' already has {openPrs.Count} open NuGroom PR(s). Skipping (--no-incremental-prs).")
+						.ResetColor();
+
+					foreach (var existingPr in openPrs)
+					{
+						ConsoleWriter.Out.Yellow()
+							.WriteLine($"    PR #{existingPr.PullRequestId}: {existingPr.Title}")
+							.ResetColor();
+					}
+
+					return;
+				}
+			}
+
 			// Resolve source branch (to branch from and read files)
 			(string RefName, string ObjectId)? sourceBranch;
 

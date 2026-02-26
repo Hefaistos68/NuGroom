@@ -707,6 +707,52 @@ namespace NuGroom.ADO
 		}
 
 		/// <summary>
+		/// Checks whether any open pull requests exist in the repository whose source branch
+		/// starts with the specified prefix (e.g., "nugroom/").
+		/// </summary>
+		/// <param name="repository">The repository to search.</param>
+		/// <param name="branchPrefix">The branch name prefix to match (without refs/heads/).</param>
+		/// <returns>A list of open pull requests whose source branch matches the prefix.</returns>
+		public async Task<List<GitPullRequest>> GetOpenPullRequestsByBranchPrefixAsync(
+			GitRepository repository,
+			string branchPrefix)
+		{
+			ArgumentNullException.ThrowIfNull(repository);
+
+			if (string.IsNullOrWhiteSpace(branchPrefix))
+			{
+				throw new ArgumentException("Branch prefix is required.", nameof(branchPrefix));
+			}
+
+			try
+			{
+				var searchCriteria = new GitPullRequestSearchCriteria
+				{
+					Status = PullRequestStatus.Active
+				};
+
+				Logger.Debug($"Searching for open PRs in {repository.Name} with source branch prefix '{branchPrefix}'");
+
+				var pullRequests = await _gitClient.GetPullRequestsAsync(repository.Id, searchCriteria);
+				var refPrefix = $"refs/heads/{branchPrefix}";
+
+				var matching = pullRequests
+					.Where(pr => pr.SourceRefName.StartsWith(refPrefix, StringComparison.OrdinalIgnoreCase))
+					.ToList();
+
+				Logger.Debug($"Found {matching.Count} open PR(s) matching prefix '{branchPrefix}' in {repository.Name}");
+
+				return matching;
+			}
+			catch (Exception ex)
+			{
+				Logger.Warning($"Failed to query open PRs in {repository.Name}: {ex.Message}");
+
+				return [];
+			}
+		}
+
+		/// <summary>
 		/// Reads file content from a specific branch version
 		/// </summary>
 		/// <param name="repository">The repository.</param>
