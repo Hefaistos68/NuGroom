@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using NuGroom.Configuration;
 
 using Shouldly;
@@ -334,6 +336,90 @@ namespace NuGroom.Tests
 			finally
 			{
 				Environment.SetEnvironmentVariable(varName, null);
+			}
+		}
+
+		[Test]
+		public void ResolveEnvironmentVariable_WhenNoPattern_ReturnsOriginal()
+		{
+			var result = ConfigLoader.ResolveEnvironmentVariable("plain-value");
+
+			result.ShouldBe("plain-value");
+		}
+
+		[Test]
+		public void ResolveEnvironmentVariable_WhenEnvNotSet_ReturnsPlaceholder()
+		{
+			var placeholder = "$env:NOT_SET_VAR";
+
+			var result = ConfigLoader.ResolveEnvironmentVariable(placeholder);
+
+			result.ShouldBe(placeholder);
+		}
+
+		[Test]
+		public void ResolveEnvironmentVariable_WhenShellStyleSet_ReturnsValue()
+		{
+			var varName = $"NUGROOM_TEST_SHELL_{Guid.NewGuid():N}";
+			Environment.SetEnvironmentVariable(varName, "shell-value");
+
+			try
+			{
+				var result = ConfigLoader.ResolveEnvironmentVariable($"${{{varName}}}");
+
+				result.ShouldBe("shell-value");
+			}
+			finally
+			{
+				Environment.SetEnvironmentVariable(varName, null);
+			}
+		}
+
+		[Test]
+		public void ResolveSecrets_WhenConfigIsNull_Throws()
+		{
+			Should.Throw<ArgumentNullException>(() => ConfigLoader.ResolveSecrets(null!));
+		}
+
+		[Test]
+		public void ResolveSecrets_WhenTokenUsesEnvVar_UpdatesToken()
+		{
+			var varName = $"NUGROOM_TEST_TOKEN_{Guid.NewGuid():N}";
+			Environment.SetEnvironmentVariable(varName, "resolved-token");
+
+			try
+			{
+				var cfg = new ToolConfig
+				{
+					Token   = $"$env:{varName}",
+					FeedAuth = [new FeedAuth("MyFeed", null, "$env:UNSET_FEED_PAT")]
+				};
+
+				ConfigLoader.ResolveSecrets(cfg);
+
+				cfg.Token.ShouldBe("resolved-token");
+				cfg.FeedAuth.ShouldNotBeNull();
+				cfg.FeedAuth![0].Pat.ShouldBe("$env:UNSET_FEED_PAT");
+			}
+			finally
+			{
+				Environment.SetEnvironmentVariable(varName, null);
+			}
+		}
+
+		[Test]
+		public void Load_WhenJsonInvalid_ThrowsJsonException()
+		{
+			var path = Path.Combine(Path.GetTempPath(), $"config-test-{Guid.NewGuid()}.json");
+			File.WriteAllText(path, "{ invalid json }");
+
+			try
+			{
+				Should.Throw<JsonException>(() => ConfigLoader.Load(path));
+			}
+			finally
+			{
+				File.Delete(path);
 			}
 		}
 	}

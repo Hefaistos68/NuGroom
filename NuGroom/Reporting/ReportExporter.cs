@@ -263,7 +263,7 @@ namespace NuGroom.Reporting
 					 .WriteLine($"{rec.Repository}/{Path.GetFileName(rec.ProjectPath)}")
 					 .Gray().Write("    Current: ")
 					 .Yellow().Write(rec.CurrentVersion)
-					 .Gray().Write(" ? Upgrade to: ")
+					 .Gray().Write(" -> Upgrade to: ")
 					 .Green().WriteLine(rec.RecommendedVersion)
 					 .ResetColor()
 					 .WriteLineColored(ConsoleColor.DarkGray, $"    {rec.Reason}");

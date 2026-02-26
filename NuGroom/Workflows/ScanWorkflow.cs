@@ -165,7 +165,7 @@ namespace NuGroom.Workflows
 						// Merge CPM versions from the nearest Directory.Packages.props for this project
 						var cpmResult = FindNearestCpmResult(projectFile.Path, cpmLookup);
 
-						if (cpmResult != null)
+						if (cpmResult != null && cpmResult.ManagePackageVersionsCentrally)
 						{
 							refs = CpmPackageExtractor.MergeCpmVersions(refs, cpmResult.PackageVersions, cpmResult.FilePath);
 						}
@@ -226,16 +226,14 @@ namespace NuGroom.Workflows
 
 				var result = CpmPackageExtractor.Parse(content);
 
-				if (result.ManagePackageVersionsCentrally)
-				{
-					results.Add(result with { FilePath = cpmFile.Path });
-				}
+				results.Add(result with { FilePath = cpmFile.Path });
 			}
 
-			if (results.Count > 0)
+			var activeCpmCount = results.Count(r => r.ManagePackageVersionsCentrally);
+			if (activeCpmCount > 0)
 			{
-				var totalPackages = results.Sum(r => r.PackageVersions.Count);
-				ConsoleWriter.Out.WriteLine($"  CPM detected ({results.Count} file(s), {totalPackages} centrally managed package(s))");
+				var totalPackages = results.Where(r => r.ManagePackageVersionsCentrally).Sum(r => r.PackageVersions.Count);
+				ConsoleWriter.Out.WriteLine($"  CPM detected ({activeCpmCount} active file(s), {totalPackages} centrally managed package(s))");
 			}
 
 			return results;
@@ -350,7 +348,7 @@ namespace NuGroom.Workflows
 
 					// Avoid duplicates: skip packages already extracted from the project file
 					var existingPackages = context.TempPackageReferences
-						.Where(r => r.ProjectPath == associatedProject)
+						.Where(r => string.Equals(r.ProjectPath, associatedProject, StringComparison.OrdinalIgnoreCase))
 						.Select(r => r.PackageName)
 						.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -461,7 +459,7 @@ namespace NuGroom.Workflows
 			}
 
 			ConsoleWriter.Out.WriteLine("Resolving NuGet package information and cross-referencing source projects...");
-			var uniquePackages = tempReferences.Select(pr => pr.PackageName).Distinct().ToList();
+			var uniquePackages = tempReferences.Select(pr => pr.PackageName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 			var nugetInfos = await nugetResolver.ResolvePackagesAsync(uniquePackages, tempReferences);
 			var result = new List<PackageReferenceExtractor.PackageReference>();
 

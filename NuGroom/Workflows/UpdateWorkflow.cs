@@ -78,7 +78,9 @@ namespace NuGroom.Workflows
 			// Check for existing open NuGroom PRs when --no-incremental-prs is set
 			if (updateConfig.NoIncrementalPrs)
 			{
-				var openPrs = await client.GetOpenPullRequestsByBranchPrefixAsync(repository, updateConfig.FeatureBranchName);
+				var branchPrefix = BuildFeatureBranchPrefix(updateConfig);
+
+				var openPrs = await client.GetOpenPullRequestsByBranchPrefixAsync(repository, branchPrefix);
 
 				if (openPrs.Count > 0)
 				{
@@ -100,13 +102,15 @@ namespace NuGroom.Workflows
 			// Resolve source branch (to branch from and read files)
 			(string RefName, string ObjectId)? sourceBranch;
 
-			if (updateConfig.SourceBranchPattern != null)
+			var sourcePattern = updateConfig.SourceBranchPattern ?? updateConfig.TargetBranchPattern;
+
+			if (!string.IsNullOrEmpty(sourcePattern))
 			{
-				sourceBranch = await client.FindLatestBranchAsync(repository, updateConfig.SourceBranchPattern);
+				sourceBranch = await client.FindLatestBranchAsync(repository, sourcePattern);
 
 				if (sourceBranch == null)
 				{
-					ConsoleWriter.Out.Yellow().WriteLine($"  No source branch matching '{updateConfig.SourceBranchPattern}' found. Skipping.").ResetColor();
+					ConsoleWriter.Out.Yellow().WriteLine($"  No source branch matching '{sourcePattern}' found. Skipping.").ResetColor();
 					return;
 				}
 			}
@@ -122,12 +126,27 @@ namespace NuGroom.Workflows
 			}
 
 			// Resolve target branch (PR destination)
-			var targetBranch = await client.FindLatestBranchAsync(repository, updateConfig.TargetBranchPattern);
+			(string RefName, string ObjectId)? targetBranch;
 
-			if (targetBranch == null)
+			if (!string.IsNullOrEmpty(updateConfig.TargetBranchPattern))
 			{
-				ConsoleWriter.Out.Yellow().WriteLine($"  No target branch matching '{updateConfig.TargetBranchPattern}' found. Skipping.").ResetColor();
-				return;
+				targetBranch = await client.FindLatestBranchAsync(repository, updateConfig.TargetBranchPattern);
+
+				if (targetBranch == null)
+				{
+					ConsoleWriter.Out.Yellow().WriteLine($"  No target branch matching '{updateConfig.TargetBranchPattern}' found. Skipping.").ResetColor();
+					return;
+				}
+			}
+			else
+			{
+				targetBranch = await client.GetDefaultBranchAsync(repository);
+
+				if (targetBranch == null)
+				{
+					ConsoleWriter.Out.Yellow().WriteLine($"  Could not resolve default branch for '{plan.RepositoryName}'. Skipping.").ResetColor();
+					return;
+				}
 			}
 
 			ConsoleWriter.Out
@@ -171,7 +190,18 @@ namespace NuGroom.Workflows
 			}
 
 			// Build descriptive branch name and commit message
-			var featureBranch = $"{updateConfig.FeatureBranchName}-{DateTime.UtcNow:yyyyMMdd-HHmmss}";
+			var now = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+			var featureBranch = updateConfig.FeatureBranchName
+				.Replace("{scope}", updateConfig.Scope.ToString().ToLowerInvariant())
+				.Replace("{date}", now);
+
+			var hasDatePlaceholder = updateConfig.FeatureBranchName.Contains("{date}", StringComparison.Ordinal);
+
+			if (!hasDatePlaceholder && !featureBranch.Contains(now, StringComparison.Ordinal))
+			{
+				featureBranch = $"{featureBranch}-{now}";
+			}
+
 			var totalUpdates = plan.FileUpdates.Sum(f => f.Updates.Count);
 			var commitMessage = $"chore: update {totalUpdates} NuGet package reference(s) ({updateConfig.Scope} scope)";
 
@@ -310,6 +340,27 @@ namespace NuGroom.Workflows
 				PackageSourceKind.PackagesConfig => PackageReferenceUpdater.ApplyPackagesConfigUpdates(content, fileUpdate.Updates),
 				_ => PackageReferenceUpdater.ApplyUpdates(content, fileUpdate.Updates)
 			};
+		}
+
+		/// <summary>
+		/// Builds the branch prefix used for PR existence checks based on the feature branch pattern.
+		/// </summary>
+		/// <param name="updateConfig">Update configuration containing the feature branch template.</param>
+		/// <returns>Branch prefix with scope placeholder resolved and before any additional tokens.</returns>
+		private static string BuildFeatureBranchPrefix(UpdateConfig updateConfig)
+		{
+			ArgumentNullException.ThrowIfNull(updateConfig);
+
+			var branchPrefix = updateConfig.FeatureBranchName
+				.Replace("{scope}", updateConfig.Scope.ToString().ToLowerInvariant())
+				.Split('{')[0];
+
+			if (string.IsNullOrWhiteSpace(branchPrefix))
+			{
+				return "nugroom/";
+			}
+
+			return branchPrefix;
 		}
 	}
 }

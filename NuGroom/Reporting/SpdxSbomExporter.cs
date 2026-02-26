@@ -44,7 +44,9 @@ namespace NuGroom.Reporting
 
 			var packageElements = new List<string>();
 
-			foreach (var r in references)
+			var uniqueReferences = references.DistinctBy(r => new { r.PackageName, r.Version });
+
+			foreach (var r in uniqueReferences)
 			{
 				var element = BuildPackageElement(r, creationInfo);
 				graph.Add(element);
@@ -158,7 +160,8 @@ namespace NuGroom.Reporting
 
 		private static string SanitizeId(string value)
 		{
-			return value.Replace(' ', '-').Replace('/', '-').Replace('\\', '-');
+			var chars = value.Select(c => char.IsLetterOrDigit(c) || c == '.' || c == '-' ? c : '-').ToArray();
+			return new string(chars);
 		}
 
 		#region SPDX 3.0.0 DTOs
