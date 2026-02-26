@@ -284,9 +284,9 @@ namespace NuGroom.Tests
 		}
 
 		[Test]
-		public void WhenExcludeCsprojThenConfigContainsPattern()
+		public void WhenExcludeProjectThenConfigContainsPattern()
 		{
-			var args = MinimalValidArgs.Concat(["--exclude-csproj", ".*\\.Tests\\.csproj"]).ToArray();
+			var args = MinimalValidArgs.Concat(["--exclude-project", ".*\\.Tests\\.csproj"]).ToArray();
 
 			var result = CommandLineParser.Parse(args);
 
@@ -337,9 +337,9 @@ namespace NuGroom.Tests
 		}
 
 		[Test]
-		public void WhenCaseSensitiveCsprojThenConfigReflectsIt()
+		public void WhenCaseSensitiveProjectThenConfigReflectsIt()
 		{
-			var args = MinimalValidArgs.Concat(["--case-sensitive-csproj"]).ToArray();
+			var args = MinimalValidArgs.Concat(["--case-sensitive-project"]).ToArray();
 
 			var result = CommandLineParser.Parse(args);
 

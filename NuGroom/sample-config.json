@@ -44,6 +44,7 @@
     "ExportPackages": "nugroom-report.json",
     "ExportWarnings": "nugroom-warnings.json",
     "ExportRecommendations": "nugroom-recommendations.json",
+    "ExportSbom": "nugroom-sbom.spdx.json",
     "ExportFormat": "Json",
     "Update": {
         "Scope": "Patch",

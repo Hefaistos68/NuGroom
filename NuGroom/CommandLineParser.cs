@@ -18,6 +18,7 @@ namespace NuGroom
 		string? ExportPackagesPath,
 		string? ExportWarningsPath,
 		string? ExportRecommendationsPath,
+		string? ExportSbomPath,
 		ExportFormat ExportFormat,
 		List<FeedAuth> FeedAuth,
 		VersionWarningConfig? VersionWarningConfig,
@@ -46,6 +47,7 @@ namespace NuGroom
 			public string? ExportPackagesPath { get; set; }
 			public string? ExportWarningsPath { get; set; }
 			public string? ExportRecommendationsPath { get; set; }
+			public string? ExportSbomPath { get; set; }
 			public ExportFormat? ExportFormat { get; set; }
 			public string? ConfigPath { get; set; }
 			public List<FeedAuth> FeedAuth { get; } = new();
@@ -135,6 +137,7 @@ namespace NuGroom
 				ExportPackagesPath: null,
 				ExportWarningsPath: null,
 				ExportRecommendationsPath: null,
+				ExportSbomPath: null,
 				ExportFormat: Configuration.ExportFormat.Json,
 				FeedAuth: new List<FeedAuth>(),
 				VersionWarningConfig: null,
@@ -344,6 +347,17 @@ namespace NuGroom
 							{
 								Console.WriteLine($"Warning: Invalid export format '{formatStr}'. Use Json or Csv.");
 							}
+						}
+
+						break;
+					case "--export-sbom":
+						if (i + 1 < args.Length)
+						{
+							state.ExportSbomPath = args[++i];
+						}
+						else
+						{
+							Console.WriteLine("Warning: --export-sbom requires a path.");
 						}
 
 						break;
@@ -605,6 +619,11 @@ namespace NuGroom
 				state.ExportRecommendationsPath = fileConfig.ExportRecommendations;
 			}
 
+			if (state.ExportSbomPath == null && fileConfig.ExportSbom != null)
+			{
+				state.ExportSbomPath = fileConfig.ExportSbom;
+			}
+
 			if (!state.ExportFormat.HasValue && fileConfig.ExportFormat.HasValue)
 			{
 				state.ExportFormat = fileConfig.ExportFormat.Value;
@@ -795,6 +814,7 @@ namespace NuGroom
 				ExportPackagesPath: state.ExportPackagesPath,
 				ExportWarningsPath: state.ExportWarningsPath,
 				ExportRecommendationsPath: state.ExportRecommendationsPath,
+				ExportSbomPath: state.ExportSbomPath,
 				ExportFormat: state.ExportFormat ?? Configuration.ExportFormat.Json,
 				FeedAuth: state.FeedAuth,
 				VersionWarningConfig: state.VersionWarningConfig,
@@ -830,6 +850,7 @@ namespace NuGroom
 				ExportPackagesPath: state.ExportPackagesPath,
 				ExportWarningsPath: state.ExportWarningsPath,
 				ExportRecommendationsPath: state.ExportRecommendationsPath,
+				ExportSbomPath: state.ExportSbomPath,
 				ExportFormat: state.ExportFormat ?? Configuration.ExportFormat.Json,
 				FeedAuth: state.FeedAuth,
 				VersionWarningConfig: state.VersionWarningConfig,
@@ -867,6 +888,7 @@ namespace NuGroom
 			Console.WriteLine("  --export-warnings <path>     Export version warnings to a separate file");
 			Console.WriteLine("  --export-recommendations <path> Export update recommendations to a separate file");
 			Console.WriteLine("  --export-format <format>     Export format: Json or Csv (default: Json)");
+			Console.WriteLine("  --export-sbom <path>         Export SPDX 3.0.0 SBOM (Software Bill of Materials) as JSON-LD");
 			Console.WriteLine();
 			Console.WriteLine("Exclusion Options:");
 			Console.WriteLine("  --exclude-prefix <prefix>    Exclude packages starting with prefix (e.g., Microsoft.)");

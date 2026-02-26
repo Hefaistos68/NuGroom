@@ -74,6 +74,7 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
   - CSV export for spreadsheet analysis
   - Unified `--export-packages` option with format controlled by `--export-format`
   - Separate export for version warnings and recommendations
+  - **SBOM export** in [SPDX 3.0.0](https://spdx.github.io/spdx-spec/v3.0/) JSON-LD format for supply chain transparency
 - **Configurable exclusion system** with multiple filtering options:
   - Prefix exclusions (e.g., "Microsoft.*", "System.*")
   - Exact package name exclusions (e.g., "Newtonsoft.Json")
@@ -136,6 +137,11 @@ NuGroom --config settings.json --export-warnings warnings.json --export-recommen
 ### Export Warnings as CSV
 ```bash
 NuGroom --config settings.json --export-warnings warnings.csv --export-format csv
+```
+
+### Export SBOM (SPDX 3.0.0)
+```bash
+NuGroom --config settings.json --export-sbom sbom.spdx.json
 ```
 
 ### Dry-Run Update Preview
@@ -259,6 +265,7 @@ NuGroom -o "https://dev.azure.com/yourorg" -t "your-token" \
 | `--export-warnings <path>` | Export version warnings to a separate file | `--export-warnings warnings.json` |
 | `--export-recommendations <path>` | Export update recommendations to a separate file | `--export-recommendations recs.json` |
 | `--export-format <format>` | Format for all exports: `Json` or `Csv` (default: `Json`) | `--export-format csv` |
+| `--export-sbom <path>` | Export SPDX 3.0.0 SBOM as JSON-LD (independent of `--export-format`) | `--export-sbom sbom.spdx.json` |
 
 ### Display Options
 | Option | Short | Description |
@@ -426,6 +433,7 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
   "ExportPackages": "report.json",
   "ExportWarnings": "warnings.json",
   "ExportRecommendations": "recommendations.json",
+  "ExportSbom": "sbom.spdx.json",
   "ExportFormat": "Json",
   "Update": {
     "Scope": "Patch",
@@ -481,6 +489,7 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
 | `ExportWarnings` | string | Standalone warnings export path | No |
 | `ExportRecommendations` | string | Standalone recommendations export path | No |
 | `ExportFormat` | string | Format for all exports: `Json` or `Csv` | No (default: `Json`) |
+| `ExportSbom` | string | SPDX 3.0.0 SBOM export path (always JSON-LD) | No |
 | `IgnoreRenovate` | bool | Skip reading `renovate.json` from repositories | No (default: false) |
 
 ### Feed Object Format
@@ -731,6 +740,28 @@ Spreadsheet-compatible format with columns:
 When version warnings are configured and the export format is CSV, additional CSV files are automatically generated:
 - `packages-warnings.csv` - Contains all version warnings with details
 - `packages-recommendations.csv` - Contains package update recommendations with current and target versions
+
+### SBOM Export (SPDX 3.0.0)
+
+Generate a Software Bill of Materials in [SPDX 3.0.0](https://spdx.github.io/spdx-spec/v3.0/) JSON-LD format using `--export-sbom` or the `ExportSbom` config field. The SBOM is always written as JSON-LD regardless of `--export-format`.
+
+The document contains:
+- An `SpdxDocument` root element with creation metadata
+- A `software_Package` element for every scanned package reference
+- Package URL (purl) external identifiers (e.g., `pkg:nuget/Serilog@3.1.1`)
+- Security metadata (deprecated / vulnerable flags) when NuGet resolution is enabled
+
+**Example usage:**
+```bash
+NuGroom --config settings.json --export-sbom sbom.spdx.json
+```
+
+**Config file:**
+```json
+{
+  "ExportSbom": "sbom.spdx.json"
+}
+```
 
 ## Package Update Recommendations
 

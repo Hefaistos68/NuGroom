@@ -47,6 +47,9 @@ namespace NuGroom.Workflows
 			// Granular exports (warnings / recommendations) using configured format
 			ExportWarnings(warnings, parseResult.ExportWarningsPath, parseResult.ExportFormat);
 			ExportRecommendations(recommendations, parseResult.ExportRecommendationsPath, parseResult.ExportFormat);
+
+			// SPDX 3.0.0 SBOM export (always JSON-LD, independent of ExportFormat)
+			ExportSbom(references, parseResult.ExportSbomPath);
 		}
 
 		/// <summary>
@@ -164,6 +167,20 @@ namespace NuGroom.Workflows
 			}
 
 			ConsoleWriter.Out.Green().WriteLine($"Recommendations exported ({format}): {path}").ResetColor();
+		}
+
+		/// <summary>
+		/// Exports an SPDX 3.0.0 SBOM (Software Bill of Materials) in JSON-LD format
+		/// </summary>
+		private static void ExportSbom(List<PackageReferenceExtractor.PackageReference> references, string? path)
+		{
+			if (string.IsNullOrWhiteSpace(path))
+			{
+				return;
+			}
+
+			SpdxSbomExporter.Export(references, path!);
+			ConsoleWriter.Out.Green().WriteLine($"SBOM exported (SPDX 3.0.0): {path}").ResetColor();
 		}
 	}
 }

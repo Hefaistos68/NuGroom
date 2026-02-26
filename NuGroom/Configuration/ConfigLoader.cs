@@ -138,6 +138,12 @@ namespace NuGroom.Configuration
 		public string? ExportRecommendations { get; set; }
 
 		/// <summary>
+		/// Path to export an SPDX 3.0.0 SBOM (Software Bill of Materials) in JSON-LD format.
+		/// If null, no SBOM is generated.
+		/// </summary>
+		public string? ExportSbom { get; set; }
+
+		/// <summary>
 		/// Output format for exported reports. Defaults to <see cref="Configuration.ExportFormat.Json"/>.
 		/// </summary>
 		public ExportFormat? ExportFormat { get; set; }
