@@ -31,14 +31,14 @@
     ],
     "ExcludePackages": [],
     "ExcludePatterns": [],
-    "ExcludeCsprojPatterns": [
+    "ExcludeProjectPatterns": [
         ".*\\.Test[s]?\\.csproj$",
         ".*\\.UnitTests\\.csproj$",
         ".*\\.IntegrationTests\\.csproj$"
     ],
     "ExcludeRepositories": [ "Legacy-.*", "Archive\\..*" ],
     "IncludeRepositories": [ "MyApp\\..*", "Shared\\.Core" ],
-    "CaseSensitiveCsprojFilters": false,
+    "CaseSensitiveProjectFilters": false,
     "NoDefaultExclusions": false,
     "CaseSensitive": false,
     "ExportPackages": "nugroom-report.json",

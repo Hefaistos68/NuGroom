@@ -31,14 +31,15 @@ namespace NuGroom.ADO
 		public bool IncludeArchivedRepositories { get; set; } = false;
 
 		/// <summary>
-		/// Optional: Regex patterns to exclude .csproj files (e.g., ".*\\.Tests\\.csproj", ".*\\.Core\\..*\\.csproj")
+		/// Optional: Regex patterns to exclude project files (e.g., ".*\\.Tests\\.csproj", ".*\\.Core\\..*\\.vbproj").
+		/// Applies to .csproj, .vbproj, and .fsproj files.
 		/// </summary>
-		public List<string> ExcludeCsprojPatterns { get; set; } = new();
+		public List<string> ExcludeProjectPatterns { get; set; } = new();
 
 		/// <summary>
-		/// Optional: Whether to use case-sensitive matching for .csproj exclusions. Default is false
+		/// Optional: Whether to use case-sensitive matching for project file exclusions. Default is false
 		/// </summary>
-		public bool CaseSensitiveCsprojFilters { get; set; } = false;
+		public bool CaseSensitiveProjectFilters { get; set; } = false;
 
 		/// <summary>
 		/// Optional: Regex patterns to exclude repositories by name (e.g., ".*\.Archive", "Legacy-.*")

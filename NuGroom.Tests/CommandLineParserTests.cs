@@ -291,7 +291,7 @@ namespace NuGroom.Tests
 			var result = CommandLineParser.Parse(args);
 
 			result.Config.ShouldNotBeNull();
-			result.Config.ExcludeCsprojPatterns.ShouldContain(".*\\.Tests\\.csproj");
+			result.Config.ExcludeProjectPatterns.ShouldContain(".*\\.Tests\\.csproj");
 		}
 
 		[Test]
@@ -344,7 +344,7 @@ namespace NuGroom.Tests
 			var result = CommandLineParser.Parse(args);
 
 			result.Config.ShouldNotBeNull();
-			result.Config.CaseSensitiveCsprojFilters.ShouldBeTrue();
+			result.Config.CaseSensitiveProjectFilters.ShouldBeTrue();
 		}
 
 		// ── Feed arguments ─────────────────────────────────────────────
@@ -769,7 +769,7 @@ namespace NuGroom.Tests
 				ResolveNuGet           = false,
 				NoDefaultExclusions    = true,
 				CaseSensitive          = true,
-				CaseSensitiveCsprojFilters = true,
+				CaseSensitiveProjectFilters = true,
 				IgnoreRenovate         = true
 			};
 			File.WriteAllText(configPath, JsonSerializer.Serialize(config));
@@ -780,7 +780,7 @@ namespace NuGroom.Tests
 			result.Config.IncludeArchivedRepositories.ShouldBeTrue();
 			result.ResolveNuGet.ShouldBeFalse();
 			result.IgnoreRenovate.ShouldBeTrue();
-			result.Config.CaseSensitiveCsprojFilters.ShouldBeTrue();
+			result.Config.CaseSensitiveProjectFilters.ShouldBeTrue();
 			result.ExclusionList.CaseSensitive.ShouldBeTrue();
 			result.ExclusionList.ExcludedPrefixes.ShouldBeEmpty();
 		}
@@ -1046,7 +1046,7 @@ namespace NuGroom.Tests
 			result.VersionWarningConfig.ShouldNotBeNull();
 		}
 
-		// ── Config file with ExcludeCsprojPatterns ─────────────────────
+		// ── Config file with ExcludeProjectPatterns ─────────────────────
 
 		[Test]
 		public void WhenConfigFileHasCsprojExclusionsThenTheyAreApplied()
@@ -1056,14 +1056,14 @@ namespace NuGroom.Tests
 			{
 				Organization          = "https://dev.azure.com/org",
 				Token                 = "token",
-				ExcludeCsprojPatterns = [".*\\.Tests\\.csproj"]
+				ExcludeProjectPatterns = [".*\\.Tests\\.csproj"]
 			};
 			File.WriteAllText(configPath, JsonSerializer.Serialize(config));
 
 			var result = CommandLineParser.Parse(["--config", configPath]);
 
 			result.Config.ShouldNotBeNull();
-			result.Config.ExcludeCsprojPatterns.ShouldContain(".*\\.Tests\\.csproj");
+			result.Config.ExcludeProjectPatterns.ShouldContain(".*\\.Tests\\.csproj");
 		}
 
 		// ── Config file with ExcludePatterns ───────────────────────────

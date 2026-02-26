@@ -6,7 +6,7 @@ using NuGroom.Configuration;
 namespace NuGroom.Nuget
 {
 	/// <summary>
-	/// Extracts, filters and formats <c>PackageReference</c> entries from .csproj files, including optional NuGet metadata resolution.
+	/// Extracts, filters and formats <c>PackageReference</c> entries from project files (.csproj, .vbproj, .fsproj), including optional NuGet metadata resolution.
 	/// </summary>
 	public class PackageReferenceExtractor
 	{
@@ -216,7 +216,7 @@ namespace NuGroom.Nuget
 			NuGetPackageResolver.PackageInfo? NuGetInfo = null);
 
 		/// <summary>
-		/// Extracts package references from .csproj file content.
+		/// Extracts package references from project file content.
 		/// </summary>
 		/// <param name="csprojContent">Raw XML content of the project file.</param>
 		/// <param name="repositoryName">Repository label for provenance.</param>
@@ -351,7 +351,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Parses the project XML to extract PackageReference entries using DOM selection.
 		/// </summary>
-		/// <param name="csprojContent">XML content of the .csproj file.</param>
+		/// <param name="csprojContent">XML content of the project file.</param>
 		/// <param name="repositoryName">Repository name used for attribution.</param>
 		/// <param name="projectPath">Path to the project file.</param>
 		/// <param name="projectName">Optional project name.</param>
@@ -416,7 +416,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Uses a regex line-by-line fallback to extract PackageReference entries when XML parsing fails.
 		/// </summary>
-		/// <param name="csprojContent">Raw .csproj content.</param>
+		/// <param name="csprojContent">Raw project file content.</param>
 		/// <param name="repositoryName">Repository name for attribution.</param>
 		/// <param name="projectPath">Path to the project file.</param>
 		/// <param name="projectName">Optional project name override.</param>
@@ -474,7 +474,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Attempts to locate the line number containing a PackageReference Include attribute.
 		/// </summary>
-		/// <param name="content">Full .csproj file content.</param>
+		/// <param name="content">Full project file content.</param>
 		/// <param name="packageName">Package name to find.</param>
 		/// <returns>1-based line number if found; otherwise 0.</returns>
 		private static int GetLineNumber(string content, string packageName)

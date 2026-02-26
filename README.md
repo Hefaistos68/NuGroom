@@ -1,14 +1,14 @@
 # NuGroom - Find, list and update packages
 
-A command-line tool that connects to Azure DevOps, searches all repositories for .csproj files, extracts PackageReference lines, and provides comprehensive package analysis including **multi-feed NuGet package information resolution with PAT authentication**.
+A command-line tool that connects to Azure DevOps, searches all repositories for C#, Visual Basic and F# project files, extracts PackageReference lines, and provides comprehensive package analysis including **multi-feed NuGet package information resolution with PAT authentication**.
 
 ## Features
 
 - Connects to Azure DevOps using Personal Access Tokens
 - Searches all repositories in an organization or specific project
-- Finds all .csproj files in repositories
+- Finds all C#, Visual Basic and F# project files in repositories
 - **Project File Filtering**:
-  - Exclude .csproj files by regex pattern (e.g., test projects)
+  - Exclude project files by regex pattern (e.g., test projects)
   - Case-sensitive or case-insensitive matching
   - Pre-configured patterns for common test project types
 - Extracts PackageReference entries using XML parsing with regex fallback
@@ -191,7 +191,7 @@ NuGroom --config settings.json --sync Newtonsoft.Json 13.0.1 --dry-run
 
 ### Exclude Test Projects
 ```bash
-NuGroom --config settings.json --exclude-csproj ".*\.Test[s]?\.csproj$"
+NuGroom --config settings.json --exclude-project ".*\.Test[s]?\.csproj$"
 ```
 
 ### Exclude Repositories by Name Pattern
@@ -244,8 +244,8 @@ NuGroom -o "https://dev.azure.com/yourorg" -t "your-token" \
 ### Project File Exclusion Options
 | Option | Description | Example |
 |--------|-------------|---------|
-| `--exclude-csproj <pattern>` | Exclude .csproj files matching regex pattern | `--exclude-csproj ".*\.Test[s]?\.csproj$"` |
-| `--case-sensitive-csproj` | Use case-sensitive .csproj file matching | |
+| `--exclude-project <pattern>` | Exclude project files matching regex pattern | `--exclude-project ".*\.Test[s]?\.csproj$"` |
+| `--case-sensitive-project` | Use case-sensitive project file matching | |
 
 ### Repository Exclusion Options
 | Option | Description | Example |
@@ -411,7 +411,7 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
   "ExcludePrefixes": ["Microsoft.", "System."],
   "ExcludePackages": [],
   "ExcludePatterns": [],
-  "ExcludeCsprojPatterns": [
+  "ExcludeProjectPatterns": [
     ".*\\.Test[s]?\\.csproj$",
     ".*\\.UnitTests\\.csproj$",
     ".*\\.IntegrationTests\\.csproj$"
@@ -420,7 +420,7 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
     "Legacy-.*",
     "Archive\\..*"
   ],
-  "CaseSensitiveCsprojFilters": false,
+  "CaseSensitiveProjectFilters": false,
   "NoDefaultExclusions": false,
   "CaseSensitive": false,
   "ExportPackages": "report.json",
@@ -472,9 +472,9 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
 | `ExcludePrefixes` | string[] | Package prefix exclusions | No |
 | `ExcludePackages` | string[] | Exact package exclusions | No |
 | `ExcludePatterns` | string[] | Regex pattern exclusions | No |
-| `ExcludeCsprojPatterns` | string[] | .csproj file regex exclusions | No |
+| `ExcludeProjectPatterns` | string[] | Project file regex exclusions | No |
 | `ExcludeRepositories` | string[] | Repository name regex exclusions (case-insensitive) | No |
-| `CaseSensitiveCsprojFilters` | bool | Case-sensitive .csproj matching | No (default: false) |
+| `CaseSensitiveProjectFilters` | bool | Case-sensitive project file matching | No (default: false) |
 | `NoDefaultExclusions` | bool | Disable default exclusions | No |
 | `CaseSensitive` | bool | Case-sensitive matching | No |
 | `ExportPackages` | string | Package export path (format controlled by `ExportFormat`) | No |
@@ -656,14 +656,14 @@ Minor version differences: 1
 
 ## Project File Filtering
 
-Exclude specific .csproj files from analysis using regex patterns:
+Exclude specific project files from analysis using regex patterns:
 
 ### Common Use Cases
 
 **Exclude Test Projects:**
 ```json
 {
-  "ExcludeCsprojPatterns": [
+  "ExcludeProjectPatterns": [
     ".*\\.Test[s]?\\.csproj$",
     ".*\\.UnitTests\\.csproj$",
     ".*\\.IntegrationTests\\.csproj$"
@@ -674,7 +674,7 @@ Exclude specific .csproj files from analysis using regex patterns:
 **Exclude Specific Project Types:**
 ```json
 {
-  "ExcludeCsprojPatterns": [
+  "ExcludeProjectPatterns": [
     ".*\\.Benchmarks\\.csproj$",
     ".*\\.Samples\\.csproj$",
     ".*\\.Demo\\.csproj$"
@@ -685,8 +685,8 @@ Exclude specific .csproj files from analysis using regex patterns:
 **Case-Sensitive Matching:**
 ```json
 {
-  "ExcludeCsprojPatterns": [".*\\.TEST\\.csproj$"],
-  "CaseSensitiveCsprojFilters": true
+  "ExcludeProjectPatterns": [".*\\.TEST\\.csproj$"],
+  "CaseSensitiveProjectFilters": true
 }
 ```
 
@@ -836,7 +836,7 @@ The tool can automatically create feature branches and pull requests to update o
 1. **Scan** — repositories are scanned and NuGet metadata is resolved (as usual)
 2. **Plan** — the tool compares used versions against latest available and builds an update plan within the configured scope
 3. **Preview** (dry-run) — the plan is displayed showing what branches and PRs would be created
-4. **Apply** — feature branches are created from the source branch, updated `.csproj` files are pushed, and PRs are opened against the target branch
+4. **Apply** — feature branches are created from the source branch, updated project (`.csproj`, `.vbproj`, `.fsproj`) files are pushed, and PRs are opened against the target branch
 
 Projects within each repository are processed in order of dependency count (fewest dependencies first).
 
@@ -996,7 +996,7 @@ NuGroom --config settings.json --sync Newtonsoft.Json 13.0.1 --dry-run
 ### How It Works
 
 1. If no version is provided, the latest stable version is resolved from configured feeds
-2. All repositories are scanned for `.csproj` files referencing the specified package
+2. All repositories are scanned for project files (`.csproj`, `.vbproj`, `.fsproj`) referencing the specified package
 3. Projects already at the target version are skipped
 4. For each affected repository, a feature branch is created, changes are pushed, and a PR is opened
 

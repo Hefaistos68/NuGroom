@@ -15,13 +15,18 @@ namespace NuGroom.ADO
 	/// </summary>
 	public class AzureDevOpsClient : IDisposable
 	{
+		/// <summary>
+		/// Supported project file extensions (.csproj, .vbproj, .fsproj).
+		/// </summary>
+		private static readonly string[] SupportedProjectExtensions = [".csproj", ".vbproj", ".fsproj"];
+
 		private readonly VssConnection _connection;
 		private readonly GitHttpClient _gitClient;
 		private readonly ProjectHttpClient _projectClient;
 		private readonly AzureDevOpsConfig _config;
-		private readonly List<Regex> _excludeCsprojRegexes; // precompiled exclusion patterns
-		private readonly List<Regex> _excludeRepoRegexes;   // precompiled repository exclusion patterns
-		private readonly List<Regex> _includeRepoRegexes;   // precompiled repository inclusion patterns
+		private readonly List<Regex> _excludeProjectRegexes; // precompiled project file exclusion patterns
+		private readonly List<Regex> _excludeRepoRegexes;    // precompiled repository exclusion patterns
+		private readonly List<Regex> _includeRepoRegexes;    // precompiled repository inclusion patterns
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="AzureDevOpsClient"/> class.
@@ -43,25 +48,25 @@ namespace NuGroom.ADO
 				_projectClient = _connection.GetClient<ProjectHttpClient>();
 
 				// Precompile exclusion regex patterns once
-				_excludeCsprojRegexes = new List<Regex>();
-				if (_config.ExcludeCsprojPatterns != null && _config.ExcludeCsprojPatterns.Count > 0)
-				{
-					var options = _config.CaseSensitiveCsprojFilters ? RegexOptions.Compiled : (RegexOptions.Compiled | RegexOptions.IgnoreCase);
-					foreach (var pattern in _config.ExcludeCsprojPatterns)
+					_excludeProjectRegexes = new List<Regex>();
+					if (_config.ExcludeProjectPatterns != null && _config.ExcludeProjectPatterns.Count > 0)
 					{
-						try { _excludeCsprojRegexes.Add(new Regex(pattern, options, TimeSpan.FromSeconds(2))); }
-						catch (Exception ex) { Logger.Warning($"Invalid exclude regex '{pattern}': {ex.Message}"); }
-					}
+						var options = _config.CaseSensitiveProjectFilters ? RegexOptions.Compiled : (RegexOptions.Compiled | RegexOptions.IgnoreCase);
+						foreach (var pattern in _config.ExcludeProjectPatterns)
+						{
+							try { _excludeProjectRegexes.Add(new Regex(pattern, options, TimeSpan.FromSeconds(2))); }
+							catch (Exception ex) { Logger.Warning($"Invalid exclude regex '{pattern}': {ex.Message}"); }
+						}
 
-					if (_excludeCsprojRegexes.Count > 0)
-					{
-						Logger.Debug($"Compiled {_excludeCsprojRegexes.Count} .csproj exclusion pattern(s)");
+						if (_excludeProjectRegexes.Count > 0)
+						{
+							Logger.Debug($"Compiled {_excludeProjectRegexes.Count} project file exclusion pattern(s)");
+						}
 					}
-				}
-				else
-				{
-					_excludeCsprojRegexes = new List<Regex>();
-				}
+					else
+					{
+						_excludeProjectRegexes = new List<Regex>();
+					}
 
 				// Precompile repository exclusion regex patterns once
 				_excludeRepoRegexes = new List<Regex>();
@@ -106,15 +111,25 @@ namespace NuGroom.ADO
 		}
 
 		/// <summary>
-		/// Determines whether a given .csproj file path should be excluded based on configured exclusion patterns.
+		/// Determines whether a file path has a supported project file extension (.csproj, .vbproj, .fsproj).
+		/// </summary>
+		/// <param name="path">The file path to check.</param>
+		/// <returns><c>true</c> if the file has a supported project extension; otherwise, <c>false</c>.</returns>
+		private static bool IsProjectFile(string path)
+		{
+			return SupportedProjectExtensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
+		}
+
+		/// <summary>
+		/// Determines whether a given project file path should be excluded based on configured exclusion patterns.
 		/// </summary>
 		/// <param name="path">The file path to check against exclusion patterns.</param>
 		/// <returns><c>true</c> if the file matches any exclusion pattern; otherwise, <c>false</c>.</returns>
-		private bool IsExcludedCsproj(string path)
+		private bool IsExcludedProject(string path)
 		{
-			if (_excludeCsprojRegexes.Count == 0) return false;
+			if (_excludeProjectRegexes.Count == 0) return false;
 			var fileName = Path.GetFileName(path);
-			foreach (var rx in _excludeCsprojRegexes)
+			foreach (var rx in _excludeProjectRegexes)
 			{
 				if (rx.IsMatch(fileName))
 				{
@@ -258,13 +273,13 @@ namespace NuGroom.ADO
 		}
 
 		/// <summary>
-		/// Gets all .csproj files from a repository with exclusion applied before content reads.
+		/// Gets all project files (.csproj, .vbproj, .fsproj) from a repository with exclusion applied before content reads.
 		/// </summary>
-		public async Task<List<GitItem>> GetCsProjFilesAsync(GitRepository repository)
+		public async Task<List<GitItem>> GetProjectFilesAsync(GitRepository repository)
 		{
 			try
 			{
-				Logger.Debug($"Getting .csproj files from repository: {repository.Name}");
+				Logger.Debug($"Getting project files from repository: {repository.Name}");
 
 				// Get all items in the repository
 				var items = await _gitClient.GetItemsAsync(
@@ -272,13 +287,13 @@ namespace NuGroom.ADO
 					scopePath: "/",
 					recursionLevel: VersionControlRecursionType.Full);
 
-				// Early filter: only .csproj and not excluded
-				var csprojFiles = items
-					.Where(item => !item.IsFolder && item.Path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) && !IsExcludedCsproj(item.Path))
+				// Early filter: only supported project files and not excluded
+				var projectFiles = items
+					.Where(item => !item.IsFolder && IsProjectFile(item.Path) && !IsExcludedProject(item.Path))
 					.ToList();
 
-				Logger.Debug($"Returning {csprojFiles.Count} .csproj files after early exclusion filtering in repository {repository.Name}");
-				return csprojFiles;
+				Logger.Debug($"Returning {projectFiles.Count} project file(s) after early exclusion filtering in repository {repository.Name}");
+				return projectFiles;
 			}
 			catch (Exception ex)
 			{
@@ -288,11 +303,11 @@ namespace NuGroom.ADO
 		}
 
 		/// <summary>
-		/// Gets the content of a file (skips excluded .csproj files defensively)
+		/// Gets the content of a file (skips excluded project files defensively)
 		/// </summary>
 		public async Task<string> GetFileContentAsync(GitRepository repository, GitItem item)
 		{
-			if (item.Path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) && IsExcludedCsproj(item.Path))
+			if (IsProjectFile(item.Path) && IsExcludedProject(item.Path))
 			{
 				Logger.Debug($"Skipping content read for excluded file: {item.Path}");
 				return string.Empty;

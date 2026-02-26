@@ -53,12 +53,12 @@ namespace NuGroom
 			public List<string> ExcludePrefixes { get; } = new();
 			public List<string> ExcludePackages { get; } = new();
 			public List<string> ExcludePatterns { get; } = new();
-			public List<string> ExcludeCsprojPatterns { get; } = new();
+			public List<string> ExcludeProjectPatterns { get; } = new();
 			public List<string> ExcludeRepositories { get; } = new();
 			public List<string> IncludeRepositories { get; } = new();
 			public bool? NoDefaultExclusions { get; set; }
 			public bool? CaseSensitive { get; set; }
-			public bool? CaseSensitiveCsprojFilters { get; set; }
+			public bool? CaseSensitiveProjectFilters { get; set; }
 			public int CliFeedCounter { get; set; }
 			public UpdateConfig? UpdateConfig { get; set; }
 			public bool? IgnoreRenovate { get; set; }
@@ -247,10 +247,10 @@ namespace NuGroom
 						}
 
 						break;
-					case "--exclude-csproj":
+					case "--exclude-project":
 						if (i + 1 < args.Length)
 						{
-							state.ExcludeCsprojPatterns.Add(args[++i]);
+							state.ExcludeProjectPatterns.Add(args[++i]);
 						}
 
 						break;
@@ -274,8 +274,8 @@ namespace NuGroom
 					case "--case-sensitive":
 						state.CaseSensitive = true;
 						break;
-					case "--case-sensitive-csproj":
-						state.CaseSensitiveCsprojFilters = true;
+					case "--case-sensitive-project":
+						state.CaseSensitiveProjectFilters = true;
 						break;
 					case "--skip-nuget":
 						state.ResolveNuGet = false;
@@ -580,9 +580,9 @@ namespace NuGroom
 				state.CaseSensitive = fileConfig.CaseSensitive.Value;
 			}
 
-			if (!state.CaseSensitiveCsprojFilters.HasValue && fileConfig.CaseSensitiveCsprojFilters.HasValue)
+			if (!state.CaseSensitiveProjectFilters.HasValue && fileConfig.CaseSensitiveProjectFilters.HasValue)
 			{
-				state.CaseSensitiveCsprojFilters = fileConfig.CaseSensitiveCsprojFilters.Value;
+				state.CaseSensitiveProjectFilters = fileConfig.CaseSensitiveProjectFilters.Value;
 			}
 
 			if (!state.IgnoreRenovate.HasValue && fileConfig.IgnoreRenovate.HasValue)
@@ -705,9 +705,9 @@ namespace NuGroom
 				state.ExcludePatterns.AddRange(fileConfig.ExcludePatterns.Where(p => !state.ExcludePatterns.Contains(p)));
 			}
 
-			if (fileConfig.ExcludeCsprojPatterns?.Any() == true)
+			if (fileConfig.ExcludeProjectPatterns?.Any() == true)
 			{
-				state.ExcludeCsprojPatterns.AddRange(fileConfig.ExcludeCsprojPatterns.Where(p => !state.ExcludeCsprojPatterns.Contains(p)));
+				state.ExcludeProjectPatterns.AddRange(fileConfig.ExcludeProjectPatterns.Where(p => !state.ExcludeProjectPatterns.Contains(p)));
 			}
 
 			if (fileConfig.ExcludeRepositories?.Any() == true)
@@ -814,8 +814,8 @@ namespace NuGroom
 				ProjectName                 = state.Project,
 				MaxRepositories             = state.MaxRepos,
 				IncludeArchivedRepositories = state.IncludeArchived ?? false,
-				ExcludeCsprojPatterns       = state.ExcludeCsprojPatterns,
-				CaseSensitiveCsprojFilters  = state.CaseSensitiveCsprojFilters ?? false,
+				ExcludeProjectPatterns      = state.ExcludeProjectPatterns,
+				CaseSensitiveProjectFilters = state.CaseSensitiveProjectFilters ?? false,
 				ExcludeRepositories         = state.ExcludeRepositories,
 				IncludeRepositories         = state.IncludeRepositories
 			};
@@ -872,12 +872,12 @@ namespace NuGroom
 			Console.WriteLine("  --exclude-prefix <prefix>    Exclude packages starting with prefix (e.g., Microsoft.)");
 			Console.WriteLine("  --exclude-package <name>     Exclude specific package by exact name");
 			Console.WriteLine("  --exclude-pattern <regex>    Exclude packages matching regex pattern");
-			Console.WriteLine("  --exclude-csproj <pattern>   Exclude .csproj files matching regex pattern");
+			Console.WriteLine("  --exclude-project <pattern>  Exclude project files matching regex pattern (.csproj, .vbproj, .fsproj)");
 			Console.WriteLine("  --exclude-repo <pattern>     Exclude repositories matching regex pattern (e.g., \"Legacy-.*\")");
 			Console.WriteLine("  --include-repo <pattern>     Include only repositories matching regex pattern (repeatable, processed in order)");
 			Console.WriteLine("  --no-default-exclusions      Don't exclude Microsoft.* and System.* by default");
 			Console.WriteLine("  --case-sensitive             Use case-sensitive package name matching");
-			Console.WriteLine("  --case-sensitive-csproj      Use case-sensitive .csproj file matching");
+			Console.WriteLine("  --case-sensitive-project     Use case-sensitive project file matching");
 			Console.WriteLine();
 			Console.WriteLine("Update Options:");
 			Console.WriteLine("  --update-references          Enable auto-update mode (creates branches and PRs)");

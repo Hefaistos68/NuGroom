@@ -100,7 +100,7 @@ namespace NuGroom.Configuration
 		/// <summary>
 		/// Glob or pattern list applied specifically to .csproj file names for exclusion.
 		/// </summary>
-		public List<string>? ExcludeCsprojPatterns { get; set; }
+		public List<string>? ExcludeProjectPatterns { get; set; }
 
 		/// <summary>
 		/// Regex patterns to exclude repositories by name.
@@ -115,7 +115,7 @@ namespace NuGroom.Configuration
 		/// <summary>
 		/// Enables case sensitivity for .csproj pattern filters when true.
 		/// </summary>
-		public bool? CaseSensitiveCsprojFilters { get; set; }
+		public bool? CaseSensitiveProjectFilters { get; set; }
 
 		/// <summary>
 		/// Additional named NuGet feeds to consider when resolving packages.
@@ -306,11 +306,11 @@ namespace NuGroom.Configuration
 			if (config.Detailed.HasValue) showDetailedInfo = config.Detailed.Value;
 			if (config.NoDefaultExclusions.HasValue) noDefaultExclusions = config.NoDefaultExclusions.Value;
 			if (config.CaseSensitive.HasValue) caseSensitive = config.CaseSensitive.Value;
-			if (config.CaseSensitiveCsprojFilters.HasValue) caseSensitiveCsprojFilters = config.CaseSensitiveCsprojFilters.Value;
+			if (config.CaseSensitiveProjectFilters.HasValue) caseSensitiveCsprojFilters = config.CaseSensitiveProjectFilters.Value;
 			if (config.ExcludePrefixes?.Any() == true) excludePrefixes.AddRange(config.ExcludePrefixes.Where(p => !excludePrefixes.Contains(p)));
 			if (config.ExcludePackages?.Any() == true) excludePackages.AddRange(config.ExcludePackages.Where(p => !excludePackages.Contains(p)));
 			if (config.ExcludePatterns?.Any() == true) excludePatterns.AddRange(config.ExcludePatterns.Where(p => !excludePatterns.Contains(p)));
-			if (config.ExcludeCsprojPatterns?.Any() == true) excludeCsprojPatterns.AddRange(config.ExcludeCsprojPatterns.Where(p => !excludeCsprojPatterns.Contains(p)));
+			if (config.ExcludeProjectPatterns?.Any() == true) excludeCsprojPatterns.AddRange(config.ExcludeProjectPatterns.Where(p => !excludeCsprojPatterns.Contains(p)));
 
 			// Merge named feeds
 			if (config.Feeds?.Any() == true)

@@ -92,77 +92,77 @@ namespace NuGroom.Workflows
 					continue;
 				}
 
-				// Get csproj files
-				var csprojFiles = await client.GetCsProjFilesAsync(repository);
+				// Get project files
+					var projectFiles = await client.GetProjectFilesAsync(repository);
 
-				if (csprojFiles.Count == 0)
-				{
-					continue;
-				}
-
-				// Check Renovate overrides — skip if this package is excluded
-				RenovateOverrides? repoRenovate = null;
-
-				if (!ignoreRenovate)
-				{
-					try
-					{
-						repoRenovate = await RenovateConfigReader.TryReadFromRepositoryAsync(client, repository);
-					}
-					catch (Exception ex)
-					{
-						Logger.Debug($"Failed to read Renovate config for {repository.Name}: {ex.Message}");
-					}
-				}
-
-				if (repoRenovate != null && RenovateConfigReader.IsPackageExcluded(syncConfig.PackageName, repoRenovate))
-				{
-					Logger.Debug($"Skipping {repository.Name}: package excluded by Renovate config");
-					continue;
-				}
-
-				var fileChanges = new Dictionary<string, string>();
-				var updates = new List<(string ProjectPath, string OldVersion)>();
-
-				foreach (var csprojFile in csprojFiles)
-				{
-					var content = await client.GetFileContentFromBranchAsync(
-						repository, csprojFile.Path, sourceBranch.Value.RefName);
-
-					if (string.IsNullOrWhiteSpace(content))
+					if (projectFiles.Count == 0)
 					{
 						continue;
 					}
 
-					// Extract references to find the current version of the target package
-					var refs = extractor.ExtractPackageReferences(content, repository.Name, csprojFile.Path);
-					var match = refs.FirstOrDefault(r =>
-						r.PackageName.Equals(syncConfig.PackageName, StringComparison.OrdinalIgnoreCase));
+					// Check Renovate overrides — skip if this package is excluded
+					RenovateOverrides? repoRenovate = null;
 
-					if (match == null || string.IsNullOrEmpty(match.Version))
+					if (!ignoreRenovate)
 					{
+						try
+						{
+							repoRenovate = await RenovateConfigReader.TryReadFromRepositoryAsync(client, repository);
+						}
+						catch (Exception ex)
+						{
+							Logger.Debug($"Failed to read Renovate config for {repository.Name}: {ex.Message}");
+						}
+					}
+
+					if (repoRenovate != null && RenovateConfigReader.IsPackageExcluded(syncConfig.PackageName, repoRenovate))
+					{
+						Logger.Debug($"Skipping {repository.Name}: package excluded by Renovate config");
 						continue;
 					}
 
-					if (match.Version.Equals(targetVersion, StringComparison.OrdinalIgnoreCase))
+					var fileChanges = new Dictionary<string, string>();
+					var updates = new List<(string ProjectPath, string OldVersion)>();
+
+					foreach (var projectFile in projectFiles)
 					{
-						continue;
+						var content = await client.GetFileContentFromBranchAsync(
+							repository, projectFile.Path, sourceBranch.Value.RefName);
+
+						if (string.IsNullOrWhiteSpace(content))
+						{
+							continue;
+						}
+
+						// Extract references to find the current version of the target package
+						var refs = extractor.ExtractPackageReferences(content, repository.Name, projectFile.Path);
+						var match = refs.FirstOrDefault(r =>
+							r.PackageName.Equals(syncConfig.PackageName, StringComparison.OrdinalIgnoreCase));
+
+						if (match == null || string.IsNullOrEmpty(match.Version))
+						{
+							continue;
+						}
+
+						if (match.Version.Equals(targetVersion, StringComparison.OrdinalIgnoreCase))
+						{
+							continue;
+						}
+
+						// Apply the update (works for both upgrade and downgrade)
+						var updateList = new List<PackageUpdate>
+						{
+							new(syncConfig.PackageName, match.Version, targetVersion)
+						};
+
+						var updatedContent = PackageReferenceUpdater.ApplyUpdates(content, updateList);
+
+						if (updatedContent != content)
+						{
+							fileChanges[projectFile.Path] = updatedContent;
+							updates.Add((projectFile.Path, match.Version));
+						}
 					}
-
-					// Apply the update (works for both upgrade and downgrade)
-					var updateList = new List<PackageUpdate>
-					{
-						new(syncConfig.PackageName, match.Version, targetVersion)
-					};
-
-					var updatedContent = PackageReferenceUpdater.ApplyUpdates(content, updateList);
-
-					if (updatedContent != content)
-					{
-						fileChanges[csprojFile.Path] = updatedContent;
-						updates.Add((csprojFile.Path, match.Version));
-					}
-				}
 
 				if (fileChanges.Count == 0)
 				{

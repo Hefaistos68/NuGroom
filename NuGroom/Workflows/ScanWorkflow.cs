@@ -71,7 +71,7 @@ namespace NuGroom.Workflows
 		Dictionary<string, RenovateOverrides> RenovateOverrides);
 
 	/// <summary>
-	/// Scans Azure DevOps repositories for .csproj files, extracts package references,
+	/// Scans Azure DevOps repositories for project files (.csproj, .vbproj, .fsproj), extracts package references,
 	/// optionally resolves NuGet metadata, and prints results and summary statistics.
 	/// </summary>
 	internal static class ScanWorkflow
@@ -112,7 +112,7 @@ namespace NuGroom.Workflows
 				var pinnedLookup = options.GetPinnedPackageLookup();
 				Logger.Debug($"Pinned lookup contains {pinnedLookup.Count} package(s): {string.Join(", ", pinnedLookup.Keys)}");
 
-				PrintScanSummary(repoIndex, context.TotalCsprojFiles, allPackageReferences.Count, options, nugetResolver);
+				PrintScanSummary(repoIndex, context.TotalProjectFiles, allPackageReferences.Count, options, nugetResolver);
 					PackageReferenceExtractor.PrintPackageReferences(allPackageReferences, options.ExclusionList, options.ResolveNuGet, options.ShowDetailedInfo, pinnedLookup, options.VersionWarningConfig);
 					PackageReferenceExtractor.PrintPackageSummary(allPackageReferences, options.ResolveNuGet, options.ShowDetailedInfo, pinnedLookup, options.VersionWarningConfig);
 
@@ -125,7 +125,7 @@ namespace NuGroom.Workflows
 		}
 
 		/// <summary>
-		/// Scans a single repository: reads Renovate config, enumerates .csproj files, and extracts package references.
+		/// Scans a single repository: reads Renovate config, enumerates project files, and extracts package references.
 		/// </summary>
 		private static async Task ScanRepositoryAsync(
 			AzureDevOpsClient client, PackageReferenceExtractor extractor,
@@ -136,22 +136,22 @@ namespace NuGroom.Workflows
 
 			try
 			{
-				var csprojFiles = await client.GetCsProjFilesAsync(repository);
-				context.TotalCsprojFiles += csprojFiles.Count;
+				var projectFiles = await client.GetProjectFilesAsync(repository);
+				context.TotalProjectFiles += projectFiles.Count;
 
-				if (csprojFiles.Count == 0)
+				if (projectFiles.Count == 0)
 				{
-					ConsoleWriter.Out.WriteLine($"  No .csproj files found in {repository.Name}");
+					ConsoleWriter.Out.WriteLine($"  No project files found in {repository.Name}");
 					return;
 				}
 
-				ConsoleWriter.Out.WriteLine($"  Found {csprojFiles.Count} .csproj file(s)");
+				ConsoleWriter.Out.WriteLine($"  Found {projectFiles.Count} project file(s)");
 
-				foreach (var csprojFile in csprojFiles)
+				foreach (var projectFile in projectFiles)
 				{
 					try
 					{
-						var refs = await ProcessCsprojFileAsync(client, extractor, repository, csprojFile, repoRenovate);
+						var refs = await ProcessProjectFileAsync(client, extractor, repository, projectFile, repoRenovate);
 						context.TempPackageReferences.AddRange(refs);
 
 						if (refs.Count > 0)
@@ -161,7 +161,7 @@ namespace NuGroom.Workflows
 					}
 					catch (Exception ex)
 					{
-						ConsoleWriter.Out.WriteLine($"      Warning: Failed to process {csprojFile.Path}: {ex.Message}");
+						ConsoleWriter.Out.WriteLine($"      Warning: Failed to process {projectFile.Path}: {ex.Message}");
 					}
 				}
 			}
@@ -204,26 +204,26 @@ namespace NuGroom.Workflows
 		}
 
 		/// <summary>
-		/// Processes a single .csproj file: reads content, extracts package references, and applies Renovate filtering.
+		/// Processes a single project file: reads content, extracts package references, and applies Renovate filtering.
 		/// </summary>
-		private static async Task<List<PackageReferenceExtractor.PackageReference>> ProcessCsprojFileAsync(
+		private static async Task<List<PackageReferenceExtractor.PackageReference>> ProcessProjectFileAsync(
 			AzureDevOpsClient client, PackageReferenceExtractor extractor,
-			GitRepository repository, GitItem csprojFile, RenovateOverrides? repoRenovate)
+			GitRepository repository, GitItem projectFile, RenovateOverrides? repoRenovate)
 		{
-			ConsoleWriter.Out.WriteLine($"    Processing: {csprojFile.Path}");
-			var content = await client.GetFileContentAsync(repository, csprojFile);
+			ConsoleWriter.Out.WriteLine($"    Processing: {projectFile.Path}");
+			var content = await client.GetFileContentAsync(repository, projectFile);
 
 			if (string.IsNullOrWhiteSpace(content))
 			{
 				return [];
 			}
 
-			var refs = extractor.ExtractPackageReferences(content, repository.Name, csprojFile.Path, repository.ProjectReference?.Name);
+			var refs = extractor.ExtractPackageReferences(content, repository.Name, projectFile.Path, repository.ProjectReference?.Name);
 
 			// Apply Renovate ignoreDeps filtering
 			if (repoRenovate != null)
 			{
-				refs = ApplyRenovateFiltering(refs, repoRenovate, csprojFile.Path);
+				refs = ApplyRenovateFiltering(refs, repoRenovate, projectFile.Path);
 			}
 
 			return refs;
@@ -284,7 +284,7 @@ namespace NuGroom.Workflows
 		/// </summary>
 		private sealed class ScanContext
 		{
-			public int TotalCsprojFiles { get; set; }
+			public int TotalProjectFiles { get; set; }
 			public List<PackageReferenceExtractor.PackageReference> TempPackageReferences { get; } = [];
 			public Dictionary<string, RenovateOverrides> RenovateOverrides { get; } = new(StringComparer.OrdinalIgnoreCase);
 		}
@@ -344,16 +344,16 @@ namespace NuGroom.Workflows
 			PrintPackageExclusionConfig(options.ExclusionList);
 
 			c.WriteLine()
-				.WriteLine(".csproj File Exclusion Configuration:")
-				.WriteLine($"  Case sensitive: {config.CaseSensitiveCsprojFilters}");
+				.WriteLine("Project File Exclusion Configuration:")
+				.WriteLine($"  Case sensitive: {config.CaseSensitiveProjectFilters}");
 
-			if (config.ExcludeCsprojPatterns.Any())
+			if (config.ExcludeProjectPatterns.Any())
 			{
-				c.WriteLine($"  Excluded patterns: {string.Join(", ", config.ExcludeCsprojPatterns)}");
+				c.WriteLine($"  Excluded patterns: {string.Join(", ", config.ExcludeProjectPatterns)}");
 			}
 			else
 			{
-				c.WriteLine("  No .csproj file exclusions configured");
+				c.WriteLine("  No project file exclusions configured");
 			}
 
 			PrintRepositoryConfig(config);
@@ -446,7 +446,7 @@ namespace NuGroom.Workflows
 		/// </summary>
 		private static void PrintScanSummary(
 			int processedRepos,
-			int totalCsprojFiles,
+			int totalProjectFiles,
 			int totalReferences,
 			ScanOptions options,
 			NuGetPackageResolver? nugetResolver)
@@ -457,7 +457,7 @@ namespace NuGroom.Workflows
 				.WriteLine("SCAN SUMMARY")
 				.WriteLine(new string('=', 80))
 				.WriteLine($"Repositories processed: {processedRepos}")
-				.WriteLine($"Total .csproj files found: {totalCsprojFiles}")
+				.WriteLine($"Total project files found: {totalProjectFiles}")
 				.WriteLine($"Total package references found: {totalReferences}");
 
 			if (options.ResolveNuGet && nugetResolver != null)
