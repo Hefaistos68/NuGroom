@@ -196,7 +196,8 @@ namespace NuGroom
 			string projectPath,
 			List<PackageReferenceExtractor.PackageReference> references,
 			HashSet<string> skippedNoSource,
-			HashSet<string> skippedPinned)
+			HashSet<string> skippedPinned,
+			PackageSourceKind sourceKind = PackageSourceKind.ProjectFile)
 		{
 			var updates = references
 				.Select(r => TryCreatePackageUpdate(r, skippedNoSource, skippedPinned))
@@ -209,7 +210,7 @@ namespace NuGroom
 				return null;
 			}
 
-			return new FileUpdate(projectPath, references.Count, updates);
+			return new FileUpdate(projectPath, references.Count, updates, sourceKind);
 		}
 
 		/// <summary>
@@ -243,9 +244,10 @@ namespace NuGroom
 		{
 			var fileUpdates = new List<FileUpdate>();
 
-			// Separate CPM references (consolidated) from per-file references
+			// Classify references by source kind
 			var cpmRefs = repoGroup.Where(r => r.SourceKind == PackageSourceKind.CentralPackageManagement).ToList();
-			var otherRefs = repoGroup.Where(r => r.SourceKind != PackageSourceKind.CentralPackageManagement).ToList();
+			var pkgConfigRefs = repoGroup.Where(r => r.SourceKind == PackageSourceKind.PackagesConfig).ToList();
+			var projectRefs = repoGroup.Where(r => r.SourceKind == PackageSourceKind.ProjectFile).ToList();
 
 			// Build a single FileUpdate for Directory.Packages.props from all CPM references (deduplicated by package)
 			if (cpmRefs.Count > 0)
@@ -258,8 +260,22 @@ namespace NuGroom
 				}
 			}
 
-			// Build per-file updates for project-level and packages.config references
-			var perFileUpdates = otherRefs
+			// Build per-file updates for packages.config references (grouped by actual packages.config path)
+			if (pkgConfigRefs.Count > 0)
+			{
+				var pkgConfigUpdates = pkgConfigRefs
+					.GroupBy(r => r.PackagesConfigPath ?? r.ProjectPath)
+					.OrderBy(g => g.Key)
+					.Select(pg => BuildFileUpdate(pg.Key, pg.ToList(), skippedNoSource, skippedPinned, PackageSourceKind.PackagesConfig))
+					.Where(f => f != null)
+					.Cast<FileUpdate>()
+					.OrderBy(f => f.DependencyCount);
+
+				fileUpdates.AddRange(pkgConfigUpdates);
+			}
+
+			// Build per-file updates for project-level references
+			var perFileUpdates = projectRefs
 				.GroupBy(r => r.ProjectPath)
 				.OrderBy(g => g.Key)
 				.Select(pg => BuildFileUpdate(pg.Key, pg.ToList(), skippedNoSource, skippedPinned))
@@ -311,8 +327,11 @@ namespace NuGroom
 				return null;
 			}
 
+			var cpmPath = cpmRefs.Select(r => r.CpmFilePath).FirstOrDefault(p => p != null)
+				?? "/Directory.Packages.props";
+
 			return new FileUpdate(
-				"Directory.Packages.props",
+				cpmPath,
 				cpmRefs.Count,
 				updates,
 				PackageSourceKind.CentralPackageManagement);

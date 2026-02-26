@@ -111,8 +111,8 @@ namespace NuGroom.Nuget
 				var comparison = CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
 				return IsExcludedByPrefix(packageName, comparison) ||
-				       IsExcludedByExactMatch(packageName, comparison) ||
-				       IsExcludedByPattern(packageName);
+					   IsExcludedByExactMatch(packageName, comparison) ||
+					   IsExcludedByPattern(packageName);
 			}
 
 			/// <summary>
@@ -183,9 +183,9 @@ namespace NuGroom.Nuget
 			{
 				return new ExclusionList
 				{
-					ExcludedPrefixes  = new List<string>(),
-					ExcludedPackages  = new List<string>(),
-					ExcludedPatterns  = new List<string>()
+					ExcludedPrefixes = new List<string>(),
+					ExcludedPackages = new List<string>(),
+					ExcludedPatterns = new List<string>()
 				};
 			}
 		}
@@ -222,6 +222,8 @@ namespace NuGroom.Nuget
 		/// <param name="LineNumber">Approximate line number where the reference appears.</param>
 		/// <param name="SourceKind">Identifies the format from which this reference was extracted.</param>
 		/// <param name="NuGetInfo">Resolved NuGet metadata (optional).</param>
+		/// <param name="CpmFilePath">Repository-relative path of the <c>Directory.Packages.props</c> file when CPM-sourced (optional).</param>
+		/// <param name="PackagesConfigPath">Repository-relative path of the <c>packages.config</c> file when extracted from legacy format (optional).</param>
 		public record PackageReference(
 			string PackageName,
 			string? Version,
@@ -230,7 +232,9 @@ namespace NuGroom.Nuget
 			string ProjectName,
 			int LineNumber,
 			PackageSourceKind SourceKind = PackageSourceKind.ProjectFile,
-			NuGetPackageResolver.PackageInfo? NuGetInfo = null);
+			NuGetPackageResolver.PackageInfo? NuGetInfo = null,
+			string? CpmFilePath = null,
+			string? PackagesConfigPath = null);
 
 		/// <summary>
 		/// Extracts package references from project file content.

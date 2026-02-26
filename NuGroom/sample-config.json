@@ -41,6 +41,7 @@
     "CaseSensitiveProjectFilters": false,
     "NoDefaultExclusions": false,
     "CaseSensitive": false,
+    "IncludePackagesConfig": false,
     "ExportPackages": "nugroom-report.json",
     "ExportWarnings": "nugroom-warnings.json",
     "ExportRecommendations": "nugroom-recommendations.json",

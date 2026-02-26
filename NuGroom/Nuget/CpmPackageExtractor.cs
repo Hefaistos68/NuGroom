@@ -17,9 +17,13 @@ namespace NuGroom.Nuget
 		/// <param name="PackageVersions">
 		/// Dictionary mapping package name (case-insensitive) to its centrally defined version.
 		/// </param>
+		/// <param name="FilePath">
+		/// Repository-relative path of the <c>Directory.Packages.props</c> file that was parsed.
+		/// </param>
 		internal record CpmParseResult(
 			bool ManagePackageVersionsCentrally,
-			Dictionary<string, string> PackageVersions);
+			Dictionary<string, string> PackageVersions,
+			string? FilePath = null);
 
 		/// <summary>
 		/// Parses the content of a <c>Directory.Packages.props</c> file and returns
@@ -71,6 +75,10 @@ namespace NuGroom.Nuget
 		/// <param name="cpmVersions">
 		/// Centrally managed versions keyed by package name (case-insensitive).
 		/// </param>
+		/// <param name="cpmFilePath">
+		/// Repository-relative path of the <c>Directory.Packages.props</c> file.
+		/// Stored on enriched references so the update plan can target the correct file.
+		/// </param>
 		/// <returns>
 		/// A new list where version-less references are enriched from the CPM lookup
 		/// and their <see cref="PackageSourceKind"/> is set to
@@ -78,7 +86,8 @@ namespace NuGroom.Nuget
 		/// </returns>
 		public static List<PackageReferenceExtractor.PackageReference> MergeCpmVersions(
 			List<PackageReferenceExtractor.PackageReference> projectReferences,
-			Dictionary<string, string> cpmVersions)
+			Dictionary<string, string> cpmVersions,
+			string? cpmFilePath = null)
 		{
 			if (cpmVersions.Count == 0)
 			{
@@ -100,8 +109,9 @@ namespace NuGroom.Nuget
 				{
 					result.Add(pr with
 					{
-						Version    = centralVersion,
-						SourceKind = PackageSourceKind.CentralPackageManagement
+						Version = centralVersion,
+						SourceKind = PackageSourceKind.CentralPackageManagement,
+						CpmFilePath = cpmFilePath
 					});
 				}
 				else
@@ -120,7 +130,7 @@ namespace NuGroom.Nuget
 		/// </summary>
 		private static bool DetectCpmFlag(XmlDocument doc)
 		{
-			var nodes = doc.SelectNodes("//ManagePackageVersionsCentrally");
+			var nodes = doc.SelectNodes("//*[local-name()='ManagePackageVersionsCentrally']");
 
 			if (nodes == null)
 			{
@@ -144,7 +154,7 @@ namespace NuGroom.Nuget
 		private static Dictionary<string, string> ExtractPackageVersions(XmlDocument doc)
 		{
 			var versions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-			var nodes = doc.SelectNodes("//PackageVersion[@Include]");
+			var nodes = doc.SelectNodes("//*[local-name()='PackageVersion' and @Include]");
 
 			if (nodes == null)
 			{

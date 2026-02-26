@@ -195,6 +195,12 @@ namespace NuGroom.Configuration
 		public bool NoIncrementalPrs { get; set; }
 
 		/// <summary>
+		/// Configuration for incrementing project version properties when package references are updated.
+		/// If null, no version increment is performed.
+		/// </summary>
+		public VersionIncrementConfig? VersionIncrement { get; set; }
+
+		/// <summary>
 		/// Validates that no identity appears in both required and optional reviewer lists.
 		/// </summary>
 		/// <exception cref="InvalidOperationException">Thrown when the same identity is in both lists.</exception>
@@ -223,4 +229,62 @@ namespace NuGroom.Configuration
 	/// <param name="PackageName">The full package name to synchronize.</param>
 	/// <param name="TargetVersion">The target version to sync to. If null, the latest available version is resolved from feeds.</param>
 	public record SyncConfig(string PackageName, string? TargetVersion);
+
+	/// <summary>
+	/// Defines which component of a version number to increment
+	/// </summary>
+	[JsonConverter(typeof(JsonStringEnumConverter))]
+	public enum VersionIncrementScope
+	{
+		/// <summary>Increment the patch component (e.g., 1.2.3 → 1.2.4)</summary>
+		Patch = 1,
+
+		/// <summary>Increment the minor component and reset patch (e.g., 1.2.3 → 1.3.0)</summary>
+		Minor = 2,
+
+		/// <summary>Increment the major component and reset minor and patch (e.g., 1.2.3 → 2.0.0)</summary>
+		Major = 3
+	}
+
+	/// <summary>
+	/// Configuration for automatically incrementing project version properties when package references are updated
+	/// </summary>
+	public class VersionIncrementConfig
+	{
+		/// <summary>
+		/// If true, increment the &lt;Version&gt; property in the project file
+		/// </summary>
+		public bool IncrementVersion { get; set; }
+
+		/// <summary>
+		/// If true, increment the &lt;AssemblyVersion&gt; property in the project file
+		/// </summary>
+		public bool IncrementAssemblyVersion { get; set; }
+
+		/// <summary>
+		/// If true, increment the &lt;FileVersion&gt; property in the project file
+		/// </summary>
+		public bool IncrementFileVersion { get; set; }
+
+		/// <summary>
+		/// The version component to increment. Defaults to <see cref="VersionIncrementScope.Patch"/>.
+		/// </summary>
+		[JsonConverter(typeof(JsonStringEnumConverter))]
+		public VersionIncrementScope Scope { get; set; } = VersionIncrementScope.Patch;
+
+		/// <summary>
+		/// Gets whether any version increment is configured
+		/// </summary>
+		public bool IsEnabled => IncrementVersion || IncrementAssemblyVersion || IncrementFileVersion;
+
+		/// <summary>
+		/// Sets all version increment flags to true
+		/// </summary>
+		public void EnableAll()
+		{
+			IncrementVersion         = true;
+			IncrementAssemblyVersion = true;
+			IncrementFileVersion     = true;
+		}
+	}
 }

@@ -167,6 +167,11 @@ namespace NuGroom.Configuration
 		/// If true, skip reading renovate.json files from repositories.
 		/// </summary>
 		public bool? IgnoreRenovate { get; set; }
+
+		/// <summary>
+		/// If true, include legacy <c>packages.config</c> references in the scan.
+		/// </summary>
+		public bool? IncludePackagesConfig { get; set; }
 	}
 
 	/// <summary>

@@ -74,7 +74,10 @@ namespace NuGroom
 			public bool TargetBranchExplicit { get; set; }
 			public bool SourcePackagesOnlyExplicit { get; set; }
 			public bool NoIncrementalPrsExplicit { get; set; }
+			public bool? IncludePackagesConfig { get; set; }
 			public List<SyncConfig> SyncConfigs { get; } = new();
+			public VersionIncrementConfig? VersionIncrement { get; set; }
+			public bool VersionIncrementExplicit { get; set; }
 		}
 
 		/// <summary>
@@ -287,6 +290,9 @@ namespace NuGroom
 					case "--resolve-nuget":
 						state.ResolveNuGet = true;
 						break;
+					case "--include-packages-config":
+						state.IncludePackagesConfig = true;
+						break;
 					case "--detailed":
 					case "-d":
 						state.ShowDetailedInfo = true;
@@ -465,6 +471,34 @@ namespace NuGroom
 						}
 
 						break;
+					case "--increment-project-version":
+						state.UpdateConfig ??= new UpdateConfig();
+						state.VersionIncrement ??= new VersionIncrementConfig();
+						state.VersionIncrement.IncrementVersion = true;
+						state.VersionIncrementExplicit = true;
+						ParseOptionalVersionIncrementScope(args, ref i, state.VersionIncrement);
+						break;
+					case "--increment-project-assemblyversion":
+						state.UpdateConfig ??= new UpdateConfig();
+						state.VersionIncrement ??= new VersionIncrementConfig();
+						state.VersionIncrement.IncrementAssemblyVersion = true;
+						state.VersionIncrementExplicit = true;
+						ParseOptionalVersionIncrementScope(args, ref i, state.VersionIncrement);
+						break;
+					case "--increment-project-fileversion":
+						state.UpdateConfig ??= new UpdateConfig();
+						state.VersionIncrement ??= new VersionIncrementConfig();
+						state.VersionIncrement.IncrementFileVersion = true;
+						state.VersionIncrementExplicit = true;
+						ParseOptionalVersionIncrementScope(args, ref i, state.VersionIncrement);
+						break;
+					case "--increment-project-version-all":
+						state.UpdateConfig ??= new UpdateConfig();
+						state.VersionIncrement ??= new VersionIncrementConfig();
+						state.VersionIncrement.EnableAll();
+						state.VersionIncrementExplicit = true;
+						ParseOptionalVersionIncrementScope(args, ref i, state.VersionIncrement);
+						break;
 					default:
 						Console.WriteLine($"Error: Unknown argument '{args[i]}'");
 						ShowHelp();
@@ -545,6 +579,22 @@ namespace NuGroom
 		}
 
 		/// <summary>
+		/// Parses an optional version increment scope argument following a version increment flag.
+		/// If the next argument is a valid <see cref="VersionIncrementScope"/>, it is consumed and applied.
+		/// </summary>
+		private static void ParseOptionalVersionIncrementScope(string[] args, ref int i, VersionIncrementConfig config)
+		{
+			if (i + 1 < args.Length && !args[i + 1].StartsWith("-"))
+			{
+				if (Enum.TryParse<VersionIncrementScope>(args[i + 1], ignoreCase: true, out var scope))
+				{
+					config.Scope = scope;
+					i++;
+				}
+			}
+		}
+
+		/// <summary>
 		/// Applies configuration file defaults to CLI parsing state where CLI values were not provided
 		/// </summary>
 		private static void ApplyConfigFileDefaults(ToolConfig fileConfig, CliParsingState state)
@@ -603,6 +653,11 @@ namespace NuGroom
 			if (!state.IgnoreRenovate.HasValue && fileConfig.IgnoreRenovate.HasValue)
 			{
 				state.IgnoreRenovate = fileConfig.IgnoreRenovate.Value;
+			}
+
+			if (!state.IncludePackagesConfig.HasValue && fileConfig.IncludePackagesConfig.HasValue)
+			{
+				state.IncludePackagesConfig = fileConfig.IncludePackagesConfig.Value;
 			}
 
 			if (state.ExportPackagesPath == null && fileConfig.ExportPackages != null)
@@ -684,6 +739,11 @@ namespace NuGroom
 				if (!state.NoIncrementalPrsExplicit)
 				{
 					state.UpdateConfig.NoIncrementalPrs = fileConfig.Update.NoIncrementalPrs;
+				}
+
+				if (!state.VersionIncrementExplicit)
+				{
+					state.UpdateConfig.VersionIncrement = fileConfig.Update.VersionIncrement;
 				}
 			}
 
@@ -820,7 +880,8 @@ namespace NuGroom
 				FeedAuth: state.FeedAuth,
 				VersionWarningConfig: state.VersionWarningConfig,
 				UpdateConfig: state.UpdateConfig,
-				SyncConfigs: state.SyncConfigs);
+				SyncConfigs: state.SyncConfigs,
+				IncludePackagesConfig: state.IncludePackagesConfig ?? false);
 		}
 
 		/// <summary>
@@ -841,6 +902,12 @@ namespace NuGroom
 				IncludeRepositories         = state.IncludeRepositories
 			};
 
+			// Wire CLI version increment config into UpdateConfig if set explicitly
+			if (state.VersionIncrement != null && state.UpdateConfig != null)
+			{
+				state.UpdateConfig.VersionIncrement = state.VersionIncrement;
+			}
+
 			return new ParseResult(
 				Config: azConfig,
 				ExclusionList: exclusionList,
@@ -856,7 +923,8 @@ namespace NuGroom
 				FeedAuth: state.FeedAuth,
 				VersionWarningConfig: state.VersionWarningConfig,
 				UpdateConfig: state.UpdateConfig,
-				SyncConfigs: state.SyncConfigs);
+				SyncConfigs: state.SyncConfigs,
+				IncludePackagesConfig: state.IncludePackagesConfig ?? false);
 		}
 
 		/// <summary>
@@ -881,6 +949,7 @@ namespace NuGroom
 			Console.WriteLine("  -a, --include-archived       Include archived repositories");
 			Console.WriteLine("  --resolve-nuget              Resolve NuGet package information (default: true)");
 			Console.WriteLine("  --skip-nuget                 Skip NuGet package resolution");
+			Console.WriteLine("  --include-packages-config    Include legacy packages.config references in scan");
 			Console.WriteLine("  -d, --detailed               Show detailed package information");
 			Console.WriteLine("  --debug                      Enable debug logging (automatically enabled when debugger attached)");
 			Console.WriteLine("  --feed <url>                 Add NuGet feed URL");
@@ -915,6 +984,12 @@ namespace NuGroom
 			Console.WriteLine("  --tag-commits                Create a lightweight git tag on the feature branch commit");
 			Console.WriteLine("  --no-incremental-prs         Skip repos that already have open NuGroom PRs (exit with warning)");
 			Console.WriteLine("  --ignore-renovate            Skip reading renovate.json from repositories");
+			Console.WriteLine();
+			Console.WriteLine("Version Increment Options (applied to projects with updated references):");
+			Console.WriteLine("  --increment-project-version [scope]          Increment <Version> (Patch, Minor, or Major; default: Patch)");
+			Console.WriteLine("  --increment-project-assemblyversion [scope]  Increment <AssemblyVersion>");
+			Console.WriteLine("  --increment-project-fileversion [scope]      Increment <FileVersion>");
+			Console.WriteLine("  --increment-project-version-all [scope]      Increment all three version properties");
 			Console.WriteLine();
 			Console.WriteLine("Sync Options:");
 			Console.WriteLine("  --sync <package> [version]   Sync a specific package to a version across all repos (creates PRs)");
