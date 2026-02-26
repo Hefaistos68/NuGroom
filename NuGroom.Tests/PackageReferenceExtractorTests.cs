@@ -157,5 +157,68 @@ namespace NuGroom.Tests
 
 			result.First(r => r.PackageName == packageName).Version.ShouldBe(expectedVersion);
 		}
+
+		[Test]
+		public void WhenPackageHasVersionOverrideThenExtractsVersionOverrideValue()
+		{
+			var csproj = """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+					<PackageReference Include="Newtonsoft.Json" VersionOverride="14.0.0" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var extractor = new PackageReferenceExtractor(
+				PackageReferenceExtractor.ExclusionList.CreateEmpty());
+
+			var result = extractor.ExtractPackageReferences(
+				csproj, "TestRepo", "/src/Project.csproj");
+
+			result.Count.ShouldBe(1);
+			result[0].Version.ShouldBe("14.0.0");
+		}
+
+		[Test]
+		public void WhenPackageHasBothVersionAndVersionOverrideThenVersionOverrideWins()
+		{
+			var csproj = """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+					<PackageReference Include="Serilog" Version="2.12.0" VersionOverride="3.0.0" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var extractor = new PackageReferenceExtractor(
+				PackageReferenceExtractor.ExclusionList.CreateEmpty());
+
+			var result = extractor.ExtractPackageReferences(
+				csproj, "TestRepo", "/src/Project.csproj");
+
+			result.Count.ShouldBe(1);
+			result[0].Version.ShouldBe("3.0.0");
+		}
+
+		[Test]
+		public void WhenPackageHasNoVersionOrVersionOverrideThenVersionIsNull()
+		{
+			var csproj = """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+					<PackageReference Include="Newtonsoft.Json" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var extractor = new PackageReferenceExtractor(
+				PackageReferenceExtractor.ExclusionList.CreateEmpty());
+
+			var result = extractor.ExtractPackageReferences(
+				csproj, "TestRepo", "/src/Project.csproj");
+
+			result.Count.ShouldBe(1);
+			result[0].Version.ShouldBeNull();
+		}
 	}
 }

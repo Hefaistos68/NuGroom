@@ -140,7 +140,7 @@ namespace NuGroom.Workflows
 			foreach (var fileUpdate in plan.FileUpdates)
 			{
 				var currentContent = await client.GetFileContentFromBranchAsync(
-					repository, fileUpdate.ProjectPath, sourceBranch.Value.RefName);
+						repository, fileUpdate.ProjectPath, sourceBranch.Value.RefName);
 
 				if (string.IsNullOrWhiteSpace(currentContent))
 				{
@@ -148,7 +148,15 @@ namespace NuGroom.Workflows
 					continue;
 				}
 
-				var updatedContent = PackageReferenceUpdater.ApplyUpdates(currentContent, fileUpdate.Updates);
+				var updatedContent = ApplyUpdatesBySourceKind(currentContent, fileUpdate);
+
+				// Apply version increments to project files (not to Directory.Packages.props or packages.config)
+				if (updatedContent != currentContent
+					&& fileUpdate.SourceKind == PackageSourceKind.ProjectFile
+					&& updateConfig.VersionIncrement is { IsEnabled: true })
+				{
+					updatedContent = ProjectVersionIncrementer.ApplyVersionIncrements(updatedContent, updateConfig.VersionIncrement);
+				}
 
 				if (updatedContent != currentContent)
 				{
@@ -289,6 +297,19 @@ namespace NuGroom.Workflows
 			}
 
 			return sb.ToString();
+		}
+
+		/// <summary>
+		/// Dispatches to the correct apply method based on the file update's <see cref="PackageSourceKind"/>.
+		/// </summary>
+		private static string ApplyUpdatesBySourceKind(string content, FileUpdate fileUpdate)
+		{
+			return fileUpdate.SourceKind switch
+			{
+				PackageSourceKind.CentralPackageManagement => PackageReferenceUpdater.ApplyCpmUpdates(content, fileUpdate.Updates),
+				PackageSourceKind.PackagesConfig => PackageReferenceUpdater.ApplyPackagesConfigUpdates(content, fileUpdate.Updates),
+				_ => PackageReferenceUpdater.ApplyUpdates(content, fileUpdate.Updates)
+			};
 		}
 	}
 }

@@ -48,25 +48,21 @@ namespace NuGroom.ADO
 				_projectClient = _connection.GetClient<ProjectHttpClient>();
 
 				// Precompile exclusion regex patterns once
-					_excludeProjectRegexes = new List<Regex>();
-					if (_config.ExcludeProjectPatterns != null && _config.ExcludeProjectPatterns.Count > 0)
+				_excludeProjectRegexes = new List<Regex>();
+				if (_config.ExcludeProjectPatterns != null && _config.ExcludeProjectPatterns.Count > 0)
+				{
+					var options = _config.CaseSensitiveProjectFilters ? RegexOptions.Compiled : (RegexOptions.Compiled | RegexOptions.IgnoreCase);
+					foreach (var pattern in _config.ExcludeProjectPatterns)
 					{
-						var options = _config.CaseSensitiveProjectFilters ? RegexOptions.Compiled : (RegexOptions.Compiled | RegexOptions.IgnoreCase);
-						foreach (var pattern in _config.ExcludeProjectPatterns)
-						{
-							try { _excludeProjectRegexes.Add(new Regex(pattern, options, TimeSpan.FromSeconds(2))); }
-							catch (Exception ex) { Logger.Warning($"Invalid exclude regex '{pattern}': {ex.Message}"); }
-						}
+						try { _excludeProjectRegexes.Add(new Regex(pattern, options, TimeSpan.FromSeconds(2))); }
+						catch (Exception ex) { Logger.Warning($"Invalid exclude regex '{pattern}': {ex.Message}"); }
+					}
 
-						if (_excludeProjectRegexes.Count > 0)
-						{
-							Logger.Debug($"Compiled {_excludeProjectRegexes.Count} project file exclusion pattern(s)");
-						}
-					}
-					else
+					if (_excludeProjectRegexes.Count > 0)
 					{
-						_excludeProjectRegexes = new List<Regex>();
+						Logger.Debug($"Compiled {_excludeProjectRegexes.Count} project file exclusion pattern(s)");
 					}
+				}
 
 				// Precompile repository exclusion regex patterns once
 				_excludeRepoRegexes = new List<Regex>();
@@ -300,6 +296,127 @@ namespace NuGroom.ADO
 				Logger.Warning($"Could not access files in repository {repository.Name}: {ex.Message}");
 				return new List<GitItem>();
 			}
+		}
+
+		/// <summary>
+		/// Result of a single item enumeration that classifies repository files into
+		/// project files and package management files.
+		/// </summary>
+		/// <param name="ProjectFiles">Filtered project files (.csproj, .vbproj, .fsproj).</param>
+		/// <param name="ManagementFiles">Package management files (Directory.Packages.props, packages.config).</param>
+		public record RepositoryFiles(List<GitItem> ProjectFiles, List<GitItem> ManagementFiles);
+
+		/// <summary>
+		/// Gets both project files and package management files from a single repository
+		/// item enumeration, avoiding a redundant API traversal.
+		/// </summary>
+		/// <param name="repository">The repository to scan.</param>
+		/// <param name="includePackagesConfig">
+		/// When <c>false</c>, <c>packages.config</c> files are excluded from management files.
+		/// </param>
+		/// <returns>A <see cref="RepositoryFiles"/> containing both classified file lists.</returns>
+		public async Task<RepositoryFiles> GetRepositoryFilesAsync(
+			GitRepository repository,
+			bool includePackagesConfig = false)
+		{
+			try
+			{
+				Logger.Debug($"Getting repository files from: {repository.Name}");
+
+				var items = await _gitClient.GetItemsAsync(
+					repository.Id,
+					scopePath: "/",
+					recursionLevel: VersionControlRecursionType.Full);
+
+				var projectFiles = new List<GitItem>();
+				var managementFiles = new List<GitItem>();
+
+				foreach (var item in items)
+				{
+					if (item.IsFolder)
+					{
+						continue;
+					}
+
+					if (IsProjectFile(item.Path) && !IsExcludedProject(item.Path))
+					{
+						projectFiles.Add(item);
+					}
+					else if (IsPackageManagementFile(item.Path, includePackagesConfig))
+					{
+						managementFiles.Add(item);
+					}
+				}
+
+				Logger.Debug($"Found {projectFiles.Count} project file(s) and {managementFiles.Count} management file(s) in repository {repository.Name}");
+
+				return new RepositoryFiles(projectFiles, managementFiles);
+			}
+			catch (Exception ex)
+			{
+				Logger.Warning($"Could not access files in repository {repository.Name}: {ex.Message}");
+
+				return new RepositoryFiles(new List<GitItem>(), new List<GitItem>());
+			}
+		}
+
+		/// <summary>
+		/// Gets package management files (<c>Directory.Packages.props</c> and <c>packages.config</c>)
+		/// from a repository. These files are discovered from the same item tree used by
+		/// <see cref="GetProjectFilesAsync"/> but matched by exact file name.
+		/// </summary>
+		/// <param name="repository">The repository to scan.</param>
+		/// <param name="includePackagesConfig">
+		/// When <c>false</c>, <c>packages.config</c> files are excluded from the result.
+		/// </param>
+		/// <returns>List of matching <see cref="GitItem"/> entries.</returns>
+		public async Task<List<GitItem>> GetPackageManagementFilesAsync(
+			GitRepository repository,
+			bool includePackagesConfig = false)
+		{
+			try
+			{
+				Logger.Debug($"Getting package management files from repository: {repository.Name}");
+
+				var items = await _gitClient.GetItemsAsync(
+					repository.Id,
+					scopePath: "/",
+					recursionLevel: VersionControlRecursionType.Full);
+
+				var managementFiles = items
+					.Where(item => !item.IsFolder && IsPackageManagementFile(item.Path, includePackagesConfig))
+					.ToList();
+
+				Logger.Debug($"Found {managementFiles.Count} package management file(s) in repository {repository.Name}");
+
+				return managementFiles;
+			}
+			catch (Exception ex)
+			{
+				Logger.Warning($"Could not access package management files in repository {repository.Name}: {ex.Message}");
+
+				return new List<GitItem>();
+			}
+		}
+
+		/// <summary>
+		/// Determines whether a file path matches a known package management file name.
+		/// </summary>
+		private static bool IsPackageManagementFile(string path, bool includePackagesConfig)
+		{
+			var fileName = Path.GetFileName(path);
+
+			if (fileName.Equals("Directory.Packages.props", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			if (includePackagesConfig && fileName.Equals("packages.config", StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+
+			return false;
 		}
 
 		/// <summary>

@@ -1264,5 +1264,156 @@ namespace NuGroom.Tests
 
 			result.ExportFormat.ShouldBe(ExportFormat.Json);
 		}
+
+		// ── Include packages.config ───────────────────────────────────
+
+		[Test]
+		public void WhenIncludePackagesConfigFlagThenIncludePackagesConfigIsTrue()
+		{
+			var args = MinimalValidArgs.Concat(["--include-packages-config"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.IncludePackagesConfig.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenIncludePackagesConfigNotSpecifiedThenDefaultIsFalse()
+		{
+			var result = CommandLineParser.Parse(MinimalValidArgs);
+
+			result.IncludePackagesConfig.ShouldBeFalse();
+		}
+
+		// ── Export SBOM ───────────────────────────────────────────────
+
+		[Test]
+		public void WhenExportSbomSpecifiedThenPathIsSet()
+		{
+			var args = MinimalValidArgs.Concat(["--export-sbom", "sbom.spdx.json"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.ExportSbomPath.ShouldBe("sbom.spdx.json");
+		}
+
+		[Test]
+		public void WhenExportSbomWithoutPathThenPathIsNull()
+		{
+			var args = MinimalValidArgs.Concat(["--export-sbom"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.ExportSbomPath.ShouldBeNull();
+		}
+
+		// ── No incremental PRs ────────────────────────────────────────
+
+		[Test]
+		public void WhenNoIncrementalPrsFlagThenNoIncrementalPrsIsTrue()
+		{
+			var args = MinimalValidArgs.Concat(["--dry-run", "--no-incremental-prs"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.NoIncrementalPrs.ShouldBeTrue();
+		}
+
+		// ── Version increment options ─────────────────────────────────
+
+		[Test]
+		public void WhenIncrementProjectVersionThenVersionIncrementIsConfigured()
+		{
+			var args = MinimalValidArgs.Concat(["--dry-run", "--increment-project-version"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.IncrementVersion.ShouldBeTrue();
+			result.UpdateConfig.VersionIncrement.IncrementAssemblyVersion.ShouldBeFalse();
+			result.UpdateConfig.VersionIncrement.IncrementFileVersion.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenIncrementProjectVersionWithScopeThenScopeIsApplied()
+		{
+			var args = MinimalValidArgs.Concat(["--dry-run", "--increment-project-version", "Minor"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.IncrementVersion.ShouldBeTrue();
+			result.UpdateConfig.VersionIncrement.Scope.ShouldBe(VersionIncrementScope.Minor);
+		}
+
+		[Test]
+		public void WhenIncrementProjectAssemblyVersionThenFlagIsSet()
+		{
+			var args = MinimalValidArgs.Concat(["--dry-run", "--increment-project-assemblyversion"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.IncrementAssemblyVersion.ShouldBeTrue();
+			result.UpdateConfig.VersionIncrement.IncrementVersion.ShouldBeFalse();
+			result.UpdateConfig.VersionIncrement.IncrementFileVersion.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenIncrementProjectFileVersionThenFlagIsSet()
+		{
+			var args = MinimalValidArgs.Concat(["--dry-run", "--increment-project-fileversion"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.IncrementFileVersion.ShouldBeTrue();
+			result.UpdateConfig.VersionIncrement.IncrementVersion.ShouldBeFalse();
+			result.UpdateConfig.VersionIncrement.IncrementAssemblyVersion.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenIncrementProjectVersionAllThenAllFlagsAreSet()
+		{
+			var args = MinimalValidArgs.Concat(["--dry-run", "--increment-project-version-all"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.IncrementVersion.ShouldBeTrue();
+			result.UpdateConfig.VersionIncrement.IncrementAssemblyVersion.ShouldBeTrue();
+			result.UpdateConfig.VersionIncrement.IncrementFileVersion.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenIncrementProjectVersionAllWithScopeThenScopeIsApplied()
+		{
+			var args = MinimalValidArgs.Concat(["--dry-run", "--increment-project-version-all", "Major"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.IsEnabled.ShouldBeTrue();
+			result.UpdateConfig.VersionIncrement.Scope.ShouldBe(VersionIncrementScope.Major);
+		}
+
+		[Test]
+		public void WhenIncrementProjectVersionWithoutScopeThenDefaultScopeIsPatch()
+		{
+			var args = MinimalValidArgs.Concat(["--dry-run", "--increment-project-version"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.ShouldNotBeNull();
+			result.UpdateConfig.VersionIncrement.Scope.ShouldBe(VersionIncrementScope.Patch);
+		}
 	}
 }

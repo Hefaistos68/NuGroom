@@ -6,6 +6,21 @@ using NuGroom.Configuration;
 namespace NuGroom.Nuget
 {
 	/// <summary>
+	/// Identifies the source format from which a package reference was extracted.
+	/// </summary>
+	public enum PackageSourceKind
+	{
+		/// <summary>SDK-style project file with inline <c>&lt;PackageReference&gt;</c> elements.</summary>
+		ProjectFile,
+
+		/// <summary>Central Package Management via <c>Directory.Packages.props</c>.</summary>
+		CentralPackageManagement,
+
+		/// <summary>Legacy <c>packages.config</c> file.</summary>
+		PackagesConfig
+	}
+
+	/// <summary>
 	/// Extracts, filters and formats <c>PackageReference</c> entries from project files (.csproj, .vbproj, .fsproj), including optional NuGet metadata resolution.
 	/// </summary>
 	public class PackageReferenceExtractor
@@ -96,8 +111,8 @@ namespace NuGroom.Nuget
 				var comparison = CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
 				return IsExcludedByPrefix(packageName, comparison) ||
-				       IsExcludedByExactMatch(packageName, comparison) ||
-				       IsExcludedByPattern(packageName);
+					   IsExcludedByExactMatch(packageName, comparison) ||
+					   IsExcludedByPattern(packageName);
 			}
 
 			/// <summary>
@@ -168,9 +183,9 @@ namespace NuGroom.Nuget
 			{
 				return new ExclusionList
 				{
-					ExcludedPrefixes  = new List<string>(),
-					ExcludedPackages  = new List<string>(),
-					ExcludedPatterns  = new List<string>()
+					ExcludedPrefixes = new List<string>(),
+					ExcludedPackages = new List<string>(),
+					ExcludedPatterns = new List<string>()
 				};
 			}
 		}
@@ -205,7 +220,10 @@ namespace NuGroom.Nuget
 		/// <param name="RepositoryName">Repository the project belongs to.</param>
 		/// <param name="ProjectName">Logical project name.</param>
 		/// <param name="LineNumber">Approximate line number where the reference appears.</param>
+		/// <param name="SourceKind">Identifies the format from which this reference was extracted.</param>
 		/// <param name="NuGetInfo">Resolved NuGet metadata (optional).</param>
+		/// <param name="CpmFilePath">Repository-relative path of the <c>Directory.Packages.props</c> file when CPM-sourced (optional).</param>
+		/// <param name="PackagesConfigPath">Repository-relative path of the <c>packages.config</c> file when extracted from legacy format (optional).</param>
 		public record PackageReference(
 			string PackageName,
 			string? Version,
@@ -213,7 +231,10 @@ namespace NuGroom.Nuget
 			string RepositoryName,
 			string ProjectName,
 			int LineNumber,
-			NuGetPackageResolver.PackageInfo? NuGetInfo = null);
+			PackageSourceKind SourceKind = PackageSourceKind.ProjectFile,
+			NuGetPackageResolver.PackageInfo? NuGetInfo = null,
+			string? CpmFilePath = null,
+			string? PackagesConfigPath = null);
 
 		/// <summary>
 		/// Extracts package references from project file content.
@@ -382,7 +403,10 @@ namespace NuGroom.Nuget
 						if (includeAttr != null)
 						{
 							var packageName = includeAttr.Value;
-							var version = node.Attributes?["Version"]?.Value;
+
+							// VersionOverride takes precedence (CPM override), then Version
+							var version = node.Attributes?["VersionOverride"]?.Value
+								?? node.Attributes?["Version"]?.Value;
 
 							// Try to get line number (this is approximate)
 							var lineNumber = GetLineNumber(csprojContent, packageName);
@@ -442,7 +466,10 @@ namespace NuGroom.Nuget
 					if (match.Success && match.Groups.Count > 1)
 					{
 						var packageName = match.Groups[1].Value;
-						var version = ExtractVersionFromLine(line);
+
+						// VersionOverride takes precedence (CPM override), then Version
+						var version = ExtractAttributeFromLine(line, "VersionOverride")
+							?? ExtractAttributeFromLine(line, "Version");
 
 						packageReferences.Add(new PackageReference(
 							packageName,
@@ -461,14 +488,17 @@ namespace NuGroom.Nuget
 		}
 
 		/// <summary>
-		/// Extracts a Version attribute value from a single XML line, if present.
+		/// Extracts the value of a named XML attribute from a single line of text.
 		/// </summary>
 		/// <param name="line">The line of text to inspect.</param>
-		/// <returns>The version string if found; otherwise <c>null</c>.</returns>
-		private static string? ExtractVersionFromLine(string line)
+		/// <param name="attributeName">The attribute name to match (e.g. <c>Version</c>, <c>VersionOverride</c>).</param>
+		/// <returns>The attribute value if found; otherwise <c>null</c>.</returns>
+		private static string? ExtractAttributeFromLine(string line, string attributeName)
 		{
-			var versionMatch = Regex.Match(line, @"Version\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase);
-			return versionMatch.Success ? versionMatch.Groups[1].Value : null;
+			var pattern = $@"(?<![A-Za-z]){Regex.Escape(attributeName)}\s*=\s*[""']([^""']+)[""']";
+			var match = Regex.Match(line, pattern, RegexOptions.IgnoreCase);
+
+			return match.Success ? match.Groups[1].Value : null;
 		}
 
 		/// <summary>

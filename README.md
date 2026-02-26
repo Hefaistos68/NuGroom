@@ -1,4 +1,4 @@
-# NuGroom - Find, list and update packages
+ï»¿# NuGroom - Find, list and update packages
 
 A command-line tool that connects to Azure DevOps, searches all repositories for C#, Visual Basic and F# project files, extracts PackageReference lines, and provides comprehensive package analysis including **multi-feed NuGet package information resolution with PAT authentication**.
 
@@ -12,6 +12,16 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
   - Case-sensitive or case-insensitive matching
   - Pre-configured patterns for common test project types
 - Extracts PackageReference entries using XML parsing with regex fallback
+- **Central Package Management (CPM) Support**:
+  - Automatically detects `Directory.Packages.props` files in repositories
+  - Reads `<PackageVersion>` elements for centrally managed versions
+  - Merges CPM versions into project references that omit inline `Version` attributes
+  - Respects `VersionOverride` in individual project files
+  - Updates target `Directory.Packages.props` instead of individual project files
+- **Legacy packages.config Support** (opt-in):
+  - Parses `<package id="..." version="..."/>` entries from `packages.config` files
+  - Associates each `packages.config` with its co-located project file
+  - Enabled via `--include-packages-config` flag or config file
 - **NuGet Package Resolution (multi-feed with authentication)**:
   - Automatically resolves package metadata from one or more NuGet feeds
   - Supports multiple feeds via repeated `--feed` arguments (defaults to NuGet.org)
@@ -46,6 +56,7 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
   - Projects ordered by dependency count (fewest first) within each repository
   - Optional lightweight git tagging of feature branch commits
   - Skip repositories with existing open NuGroom PRs (`--no-incremental-prs`)
+  - **Project version increment**: automatically bump `<Version>`, `<AssemblyVersion>`, and/or `<FileVersion>` in project files when package references are updated
 - **Package Sync**:
   - Sync a specific package to an exact version across all repositories with a single command
   - Supports both upgrades and downgrades
@@ -58,7 +69,7 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
   - Respects `ignoreDeps` to exclude packages from scanning and updates per repository
   - Respects `packageRules` with `enabled: false` to skip disabled packages
   - Uses `reviewers` from Renovate config to override required PR reviewers per repository
-  - No additional configuration needed — detection is automatic
+  - No additional configuration needed â€” detection is automatic
 - **Health & Risk Indicators**:
   - Marks deprecated packages
   - Marks outdated packages (projects using a version older than latest on feed)
@@ -169,6 +180,16 @@ NuGroom --config settings.json --update-references --no-incremental-prs
 NuGroom --config settings.json --update-references --source-packages-only
 ```
 
+### Increment Project Patch Version on Update
+```bash
+NuGroom --config settings.json --update-references --increment-project-version
+```
+
+### Increment All Project Versions (Major) on Update
+```bash
+NuGroom --config settings.json --update-references --increment-project-version-all Major
+```
+
 ### Update with Separate Source and Target Branches
 ```bash
 NuGroom --config settings.json --update-references \
@@ -200,6 +221,11 @@ NuGroom --config settings.json --sync Newtonsoft.Json 13.0.1 --dry-run
 NuGroom --config settings.json --exclude-project ".*\.Test[s]?\.csproj$"
 ```
 
+### Include Legacy packages.config Projects
+```bash
+NuGroom --config settings.json --include-packages-config
+```
+
 ### Exclude Repositories by Name Pattern
 ```bash
 NuGroom --config settings.json --exclude-repo "Legacy-.*" --exclude-repo "Archive\..*"
@@ -229,6 +255,7 @@ NuGroom -o "https://dev.azure.com/yourorg" -t "your-token" \
 | `--project` | `-p` | Specific project name to search (searches all if not specified) |
 | `--max-repos` | `-m` | Maximum repositories to process (default: 100) |
 | `--include-archived` | `-a` | Include archived repositories (default: false) |
+| `--include-packages-config` | | Also scan legacy `packages.config` files (default: false) |
 
 ### Resolution Options
 | Option | Description | Example |
@@ -288,6 +315,18 @@ NuGroom -o "https://dev.azure.com/yourorg" -t "your-token" \
 | `--tag-commits` | Create a lightweight git tag on the feature branch commit | |
 | `--no-incremental-prs` | Skip repos that already have open NuGroom PRs (warns and skips) | |
 | `--ignore-renovate` | Skip reading `renovate.json` from repositories | |
+
+### Version Increment Options
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--increment-project-version [scope]` | Increment `<Version>` in updated project files | scope: `Patch` |
+| `--increment-project-assemblyversion [scope]` | Increment `<AssemblyVersion>` in updated project files | scope: `Patch` |
+| `--increment-project-fileversion [scope]` | Increment `<FileVersion>` in updated project files | scope: `Patch` |
+| `--increment-project-version-all [scope]` | Increment all three version properties | scope: `Patch` |
+
+The optional `[scope]` parameter accepts `Patch`, `Minor`, or `Major` (default: `Patch`).
+These options only take effect when combined with `--update-references` or `--dry-run`.
+Version properties that do not exist in a project file are left unchanged.
 
 ### Sync Options
 | Option | Description | Default |
@@ -457,7 +496,13 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
     "RequiredReviewers": ["lead@company.com"],
     "OptionalReviewers": ["teammate@company.com"],
     "TagCommits": false,
-    "NoIncrementalPrs": false
+    "NoIncrementalPrs": false,
+    "VersionIncrement": {
+      "IncrementVersion": true,
+      "IncrementAssemblyVersion": true,
+      "IncrementFileVersion": true,
+      "Scope": "Patch"
+    }
   }
 }
 ```
@@ -491,6 +536,7 @@ Create a JSON file (e.g., `settings.json`) with your configuration:
 | `ExportFormat` | string | Format for all exports: `Json` or `Csv` | No (default: `Json`) |
 | `ExportSbom` | string | SPDX 3.0.0 SBOM export path (always JSON-LD) | No |
 | `IgnoreRenovate` | bool | Skip reading `renovate.json` from repositories | No (default: false) |
+| `IncludePackagesConfig` | bool | Also scan legacy `packages.config` files | No (default: false) |
 
 ### Feed Object Format
 
@@ -699,6 +745,52 @@ Exclude specific project files from analysis using regex patterns:
 }
 ```
 
+## Central Package Management (CPM)
+
+The tool automatically detects and supports [Central Package Management](https://learn.microsoft.com/nuget/consume-packages/central-package-management) in scanned repositories.
+
+### How It Works
+
+1. When scanning a repository, the tool looks for `Directory.Packages.props` files
+2. If the file contains `<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>`, CPM is active
+3. All `<PackageVersion Include="..." Version="..."/>` entries are read into a version lookup
+4. Project files with `<PackageReference>` entries that omit a `Version` attribute have their versions populated from the CPM lookup
+5. If a project file specifies `VersionOverride`, that version takes precedence over the central version
+
+### Auto-Update Behavior
+
+When CPM is active, package version updates target `Directory.Packages.props` instead of individual project files. This means a single update to the central props file can update the version for all projects in the repository.
+
+No configuration is needed â€” CPM detection is automatic.
+
+## Legacy packages.config Support
+
+For repositories that still use the legacy `packages.config` format (common in .NET Framework projects), the tool can optionally scan and extract package references from these files.
+
+### Enabling
+
+Legacy `packages.config` scanning is opt-in to avoid noise in modern codebases:
+
+**CLI:**
+```bash
+NuGroom --config settings.json --include-packages-config
+```
+
+**Config file:**
+```json
+{
+  "IncludePackagesConfig": true
+}
+```
+
+### How It Works
+
+1. The tool discovers `packages.config` files in the repository
+2. Each file is associated with the co-located project file (`.csproj`, `.vbproj`, or `.fsproj` in the same directory)
+3. `<package id="..." version="..."/>` entries are extracted and tagged as `PackagesConfig` source kind
+4. Exclusion rules (prefix, exact, pattern) apply as usual
+5. Packages already discovered via `<PackageReference>` in the same project are deduplicated
+
 ## Multi-Feed Resolution
 
 Specify one or more feeds with `--feed`. The resolver queries each feed until a package is found, selecting the first match. The originating feed host is displayed next to each package.
@@ -795,18 +887,18 @@ The following projects should update their package versions:
 Newtonsoft.Json:
   Recommended version: 13.0.3
 
-  • MyRepository/MyProject.csproj
+  â€¢ MyRepository/MyProject.csproj
     Current: 12.0.3 ? Upgrade to: 13.0.3
     Upgrade to latest available version (currently major version behind)
 
-  • MyRepository/AnotherProject.csproj
+  â€¢ MyRepository/AnotherProject.csproj
     Current: 11.0.1 ? Upgrade to: 13.0.3
     Upgrade to latest available version (currently major version behind)
 
 Serilog:
   Recommended version: 2.12.0
 
-  • DifferentRepository/Logger.csproj
+  â€¢ DifferentRepository/Logger.csproj
     Current: 2.10.0 ? Upgrade to: 2.12.0
     Align with latest version used in solution (currently minor version behind)
 
@@ -864,10 +956,10 @@ The tool can automatically create feature branches and pull requests to update o
 
 ### How It Works
 
-1. **Scan** — repositories are scanned and NuGet metadata is resolved (as usual)
-2. **Plan** — the tool compares used versions against latest available and builds an update plan within the configured scope
-3. **Preview** (dry-run) — the plan is displayed showing what branches and PRs would be created
-4. **Apply** — feature branches are created from the source branch, updated project (`.csproj`, `.vbproj`, `.fsproj`) files are pushed, and PRs are opened against the target branch
+1. **Scan** â€” repositories are scanned and NuGet metadata is resolved (as usual)
+2. **Plan** â€” the tool compares used versions against latest available and builds an update plan within the configured scope
+3. **Preview** (dry-run) â€” the plan is displayed showing what branches and PRs would be created
+4. **Apply** â€” feature branches are created from the source branch, updated project (`.csproj`, `.vbproj`, `.fsproj`) files are pushed, and PRs are opened against the target branch
 
 Projects within each repository are processed in order of dependency count (fewest dependencies first).
 
@@ -883,9 +975,9 @@ The scope controls the maximum version change that will be applied. Scopes are c
 
 ### Branch Resolution
 
-- **Source branch** — the branch to read current file content from and create the feature branch from. Resolved via pattern matching with semver ordering (e.g., `develop/*` picks the latest `develop/1.2.3` branch). If not specified, the repository's **default branch** is used.
-- **Target branch** — the PR destination. Also resolved via pattern matching with semver ordering.
-- **Feature branch** — created with a timestamp suffix, e.g., `feature/update-nuget-references-20250224-155601`.
+- **Source branch** â€” the branch to read current file content from and create the feature branch from. Resolved via pattern matching with semver ordering (e.g., `develop/*` picks the latest `develop/1.2.3` branch). If not specified, the repository's **default branch** is used.
+- **Target branch** â€” the PR destination. Also resolved via pattern matching with semver ordering.
+- **Feature branch** â€” created with a timestamp suffix, e.g., `feature/update-nuget-references-20250224-155601`.
 
 ### Dry-Run Mode
 
@@ -924,9 +1016,45 @@ Pin packages to prevent automatic updates:
 - **Version set to a value**: the package stays at that exact version
 - **Version set to null**: the package keeps whatever version is currently used
 
+### Project Version Increment
+
+When updating package references, the tool can automatically increment version properties (`<Version>`, `<AssemblyVersion>`, `<FileVersion>`) in each project file that receives updates. This ensures the project version reflects that its dependencies have changed.
+
+**CLI flags:**
+- `--increment-project-version [scope]` â€” increment `<Version>` only
+- `--increment-project-assemblyversion [scope]` â€” increment `<AssemblyVersion>` only
+- `--increment-project-fileversion [scope]` â€” increment `<FileVersion>` only
+- `--increment-project-version-all [scope]` â€” increment all three properties
+
+The optional `[scope]` parameter controls which component is bumped:
+
+| Scope | Example |
+|-------|---------|
+| `Patch` (default) | `1.2.3` â†’ `1.2.4` |
+| `Minor` | `1.2.3` â†’ `1.3.0` |
+| `Major` | `1.2.3` â†’ `2.0.0` |
+
+Both 3-part (`Major.Minor.Patch`) and 4-part (`Major.Minor.Build.Revision`) version formats are supported. Lower components are reset to zero when a higher component is incremented.
+
+**Config file:**
+```json
+{
+  "Update": {
+    "VersionIncrement": {
+      "IncrementVersion": true,
+      "IncrementAssemblyVersion": true,
+      "IncrementFileVersion": true,
+      "Scope": "Patch"
+    }
+  }
+}
+```
+
+Version properties that do not exist in a project file are silently skipped. The increment is only applied to `.csproj` / `.vbproj` / `.fsproj` project files â€” `Directory.Packages.props` and `packages.config` files are not affected.
+
 ### Source Packages Only
 
-Use `--source-packages-only` or `"SourcePackagesOnly": true` to restrict updates to packages that have identified source projects in the scanned repositories. This is useful when you only want to update internal/private packages and leave third-party packages unchanged.
+Use `--source-packages-only` or `"SourcePackagesOnly": true` to restrict updates to packages that have identified source projects in the scanned repositories.
 
 ### PR Reviewers
 
@@ -948,7 +1076,7 @@ Or via CLI (both are repeatable):
 
 - **Required reviewers** must approve before the PR can be completed
 - **Optional reviewers** are notified but their approval is not required
-- The same identity **cannot** appear in both lists — the tool validates this before making any API calls
+- The same identity **cannot** appear in both lists â€” the tool validates this before making any API calls
 - Reviewers are resolved by email address or Azure DevOps unique name via the Identity API
 
 ### Update Configuration
@@ -966,6 +1094,16 @@ Or via CLI (both are repeatable):
 | `OptionalReviewers` | string[]? | Email addresses or unique names of optional PR reviewers | `null` |
 | `TagCommits` | bool | Create a lightweight git tag on each feature branch commit | `false` |
 | `NoIncrementalPrs` | bool | Skip repositories that already have open NuGroom PRs | `false` |
+| `VersionIncrement` | VersionIncrementConfig? | Project version increment configuration | `null` |
+
+### VersionIncrementConfig Object Format
+
+| Field | Type | Description | Default |
+|-------|------|-------------|--------|
+| `IncrementVersion` | bool | Increment `<Version>` property | `false` |
+| `IncrementAssemblyVersion` | bool | Increment `<AssemblyVersion>` property | `false` |
+| `IncrementFileVersion` | bool | Increment `<FileVersion>` property | `false` |
+| `Scope` | string | Component to increment: `Patch`, `Minor`, or `Major` | `Patch` |
 
 ### PinnedPackage Object Format
 
@@ -1033,11 +1171,11 @@ NuGroom --config settings.json --sync Newtonsoft.Json 13.0.1 --dry-run
 
 ### Behavior
 
-- **Upgrades and downgrades** — unlike `--update-references`, `--sync` has no scope restriction. It always sets the exact target version.
-- **Dry-run** — uses the `DryRun` setting from `UpdateConfig`. Pass `--dry-run` or set `"DryRun": true` to preview changes.
-- **Branch patterns** — uses `SourceBranchPattern` and `TargetBranchPattern` from `UpdateConfig`.
-- **Reviewers** — uses `RequiredReviewers` / `OptionalReviewers` from `UpdateConfig`, with Renovate `reviewers` override per repository.
-- **Renovate** — respects `ignoreDeps` and disabled `packageRules`. If the package is excluded by Renovate in a repository, that repository is skipped.
+- **Upgrades and downgrades** â€” unlike `--update-references`, `--sync` has no scope restriction. It always sets the exact target version.
+- **Dry-run** â€” uses the `DryRun` setting from `UpdateConfig`. Pass `--dry-run` or set `"DryRun": true` to preview changes.
+- **Branch patterns** â€” uses `SourceBranchPattern` and `TargetBranchPattern` from `UpdateConfig`.
+- **Reviewers** â€” uses `RequiredReviewers` / `OptionalReviewers` from `UpdateConfig`, with Renovate `reviewers` override per repository.
+- **Renovate** â€” respects `ignoreDeps` and disabled `packageRules`. If the package is excluded by Renovate in a repository, that repository is skipped.
 
 ### Example Output (Dry-Run)
 
@@ -1112,8 +1250,8 @@ With this configuration:
 
 ### Precedence
 
-- **ignoreDeps / packageRules** — applied during scanning, before NuGet resolution. These packages won't appear in reports or update plans.
-- **reviewers** — applied during PR creation. Renovate reviewers **replace** (not merge with) the tool's `RequiredReviewers` for that repository. `OptionalReviewers` from the tool config are still added.
+- **ignoreDeps / packageRules** â€” applied during scanning, before NuGet resolution. These packages won't appear in reports or update plans.
+- **reviewers** â€” applied during PR creation. Renovate reviewers **replace** (not merge with) the tool's `RequiredReviewers` for that repository. `OptionalReviewers` from the tool config are still added.
 - Repositories without a Renovate config use the tool's configured reviewers as usual.
 
 ### Console Output
@@ -1204,11 +1342,11 @@ The following projects should update their package versions:
 AutoMapper:
   Recommended version: 12.0.0
 
-  • MyRepository/Project1.csproj
+  â€¢ MyRepository/Project1.csproj
     Current: 10.0.0 ? Upgrade to: 12.0.0
     Upgrade to latest available version (currently major version behind)
 
-  • MyRepository/Project2.csproj
+  â€¢ MyRepository/Project2.csproj
     Current: 11.0.1 ? Upgrade to: 12.0.0
     Upgrade to latest available version (currently minor version behind)
 
