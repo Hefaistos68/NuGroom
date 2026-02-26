@@ -399,7 +399,10 @@ namespace NuGroom.Nuget
 						if (includeAttr != null)
 						{
 							var packageName = includeAttr.Value;
-							var version = node.Attributes?["Version"]?.Value;
+
+							// VersionOverride takes precedence (CPM override), then Version
+							var version = node.Attributes?["VersionOverride"]?.Value
+								?? node.Attributes?["Version"]?.Value;
 
 							// Try to get line number (this is approximate)
 							var lineNumber = GetLineNumber(csprojContent, packageName);
@@ -459,7 +462,10 @@ namespace NuGroom.Nuget
 					if (match.Success && match.Groups.Count > 1)
 					{
 						var packageName = match.Groups[1].Value;
-						var version = ExtractVersionFromLine(line);
+
+						// VersionOverride takes precedence (CPM override), then Version
+						var version = ExtractAttributeFromLine(line, "VersionOverride")
+							?? ExtractAttributeFromLine(line, "Version");
 
 						packageReferences.Add(new PackageReference(
 							packageName,
@@ -478,14 +484,17 @@ namespace NuGroom.Nuget
 		}
 
 		/// <summary>
-		/// Extracts a Version attribute value from a single XML line, if present.
+		/// Extracts the value of a named XML attribute from a single line of text.
 		/// </summary>
 		/// <param name="line">The line of text to inspect.</param>
-		/// <returns>The version string if found; otherwise <c>null</c>.</returns>
-		private static string? ExtractVersionFromLine(string line)
+		/// <param name="attributeName">The attribute name to match (e.g. <c>Version</c>, <c>VersionOverride</c>).</param>
+		/// <returns>The attribute value if found; otherwise <c>null</c>.</returns>
+		private static string? ExtractAttributeFromLine(string line, string attributeName)
 		{
-			var versionMatch = Regex.Match(line, @"Version\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase);
-			return versionMatch.Success ? versionMatch.Groups[1].Value : null;
+			var pattern = $@"(?<![A-Za-z]){Regex.Escape(attributeName)}\s*=\s*[""']([^""']+)[""']";
+			var match = Regex.Match(line, pattern, RegexOptions.IgnoreCase);
+
+			return match.Success ? match.Groups[1].Value : null;
 		}
 
 		/// <summary>

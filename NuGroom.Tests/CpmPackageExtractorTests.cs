@@ -243,5 +243,74 @@ namespace NuGroom.Tests
 			merged.Count.ShouldBe(1);
 			merged[0].Version.ShouldBeNull();
 		}
+
+		[Test]
+		public void WhenVersionOverrideExtractedThenMergeCpmVersionsPreservesOverrideAndKeepsProjectFileKind()
+		{
+			// Simulates extraction result where VersionOverride="14.0.0" was read into Version
+			var references = new List<PackageReferenceExtractor.PackageReference>
+			{
+				new(
+					PackageName: "Newtonsoft.Json",
+					Version: "14.0.0",
+					ProjectPath: "src/App/App.csproj",
+					RepositoryName: "App",
+					ProjectName: "App",
+					LineNumber: 5)
+			};
+
+			var cpmVersions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+			{
+				["Newtonsoft.Json"] = "13.0.3"
+			};
+
+			var merged = CpmPackageExtractor.MergeCpmVersions(references, cpmVersions);
+
+			merged.Count.ShouldBe(1);
+			merged[0].Version.ShouldBe("14.0.0");
+			merged[0].SourceKind.ShouldBe(PackageSourceKind.ProjectFile);
+		}
+
+		[Test]
+		public void WhenMixOfOverrideAndCpmManagedThenMergeCpmVersionsHandlesBothCorrectly()
+		{
+			var references = new List<PackageReferenceExtractor.PackageReference>
+			{
+				new(
+					PackageName: "Newtonsoft.Json",
+					Version: "14.0.0",
+					ProjectPath: "src/App/App.csproj",
+					RepositoryName: "App",
+					ProjectName: "App",
+					LineNumber: 5),
+				new(
+					PackageName: "Serilog",
+					Version: null,
+					ProjectPath: "src/App/App.csproj",
+					RepositoryName: "App",
+					ProjectName: "App",
+					LineNumber: 6)
+			};
+
+			var cpmVersions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+			{
+				["Newtonsoft.Json"] = "13.0.3",
+				["Serilog"]         = "3.1.1"
+			};
+
+			var merged = CpmPackageExtractor.MergeCpmVersions(references, cpmVersions);
+
+			merged.Count.ShouldBe(2);
+
+			// Newtonsoft.Json has VersionOverride — kept as ProjectFile
+			var nj = merged.First(r => r.PackageName == "Newtonsoft.Json");
+			nj.Version.ShouldBe("14.0.0");
+			nj.SourceKind.ShouldBe(PackageSourceKind.ProjectFile);
+
+			// Serilog has no version — filled from CPM
+			var sl = merged.First(r => r.PackageName == "Serilog");
+			sl.Version.ShouldBe("3.1.1");
+			sl.SourceKind.ShouldBe(PackageSourceKind.CentralPackageManagement);
+		}
 	}
 }
