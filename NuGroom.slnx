@@ -1,4 +1,15 @@
 <Solution>
+  <Folder Name="/docs/">
+    <File Path="docs/automated-updates.md" />
+    <File Path="docs/cli-reference.md" />
+    <File Path="docs/configuration.md" />
+    <File Path="docs/export-formats.md" />
+    <File Path="docs/features.md" />
+    <File Path="docs/getting-started.md" />
+    <File Path="docs/renovate-compatibility.md" />
+    <File Path="docs/samples.md" />
+    <File Path="docs/troubleshooting.md" />
+  </Folder>
   <Folder Name="/NonGitFiles/">
     <File Path="NonGitFiles/config-app-dep.json" />
     <File Path="NonGitFiles/config-mult-dep.json" />
