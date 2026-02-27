@@ -632,6 +632,46 @@ namespace NuGroom.ADO
 		}
 
 		/// <summary>
+		/// Creates a branch pointing at the specified commit without pushing any file changes.
+		/// </summary>
+		/// <param name="repository">The target repository.</param>
+		/// <param name="sourceBranchObjectId">The commit object ID the new branch should point to.</param>
+		/// <param name="branchName">Branch name (without <c>refs/heads/</c> prefix).</param>
+		/// <returns>The full ref name and object ID of the created branch.</returns>
+		public async Task<(string RefName, string ObjectId)> CreateBranchAsync(
+			GitRepository repository,
+			string sourceBranchObjectId,
+			string branchName)
+		{
+			ArgumentNullException.ThrowIfNull(repository);
+
+			if (string.IsNullOrWhiteSpace(sourceBranchObjectId))
+			{
+				throw new ArgumentException("Source branch object ID is required.", nameof(sourceBranchObjectId));
+			}
+
+			if (string.IsNullOrWhiteSpace(branchName))
+			{
+				throw new ArgumentException("Branch name is required.", nameof(branchName));
+			}
+
+			var branchRef = $"refs/heads/{branchName}";
+			Logger.Debug($"Creating branch '{branchRef}' at {sourceBranchObjectId} in {repository.Name}");
+
+			var refUpdate = new GitRefUpdate
+			{
+				Name = branchRef,
+				NewObjectId = sourceBranchObjectId,
+				OldObjectId = "0000000000000000000000000000000000000000"
+			};
+
+			await _gitClient.UpdateRefsAsync(new[] { refUpdate }, repository.Id);
+			Logger.Info($"Created branch '{branchRef}' in {repository.Name}");
+
+			return (branchRef, sourceBranchObjectId);
+		}
+
+		/// <summary>
 		/// Creates a lightweight git tag pointing at the specified commit in the repository.
 		/// </summary>
 		/// <param name="repository">The target repository.</param>

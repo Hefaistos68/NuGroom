@@ -864,6 +864,16 @@ In per-project mode:
 - No version conflicts occur because each project manages its own versions independently
 - This is useful for repositories where projects have intentionally different package versions
 
+#### Target Branch Auto-Creation
+
+When the CPM migration creates pull requests and the configured target branch does not exist, the tool automatically creates it from the source branch instead of skipping the repository.
+
+- If `TargetBranchPattern` is an exact branch name (no wildcards), it is created as a new branch from the source branch
+- If no target pattern is configured, the repository's default branch name is used
+- Wildcard patterns (e.g. `release/*`) that match no branches cannot be auto-created and will still skip
+
+This allows migrations to target branches that do not yet exist, for example when introducing a new branching strategy alongside the CPM migration.
+
 ## Legacy packages.config Support
 
 For repositories that still use the legacy `packages.config` format (common in .NET Framework projects), the tool can optionally scan and extract package references from these files.

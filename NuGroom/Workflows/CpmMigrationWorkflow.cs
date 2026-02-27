@@ -154,10 +154,21 @@ namespace NuGroom.Workflows
 
 			var targetBranch = await ResolveTargetBranchAsync(client, repository, updateConfig);
 
-			if (targetBranch == null)
-			{
-				return;
-			}
+				if (targetBranch == null)
+				{
+					var targetBranchName = DeriveTargetBranchName(updateConfig, repository);
+
+					if (targetBranchName == null)
+					{
+						ConsoleWriter.Out.Yellow().WriteLine("  Could not determine target branch name. Skipping.").ResetColor();
+
+						return;
+					}
+
+					ConsoleWriter.Out.WriteLine($"  Target branch not found, creating '{targetBranchName}' from source branch...");
+					targetBranch = await client.CreateBranchAsync(repository, sourceBranch.Value.ObjectId, targetBranchName);
+					ConsoleWriter.Out.Green().WriteLine($"  Created target branch: {targetBranch.Value.RefName}").ResetColor();
+				}
 
 			var now = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
 			var featureBranch = $"feature/migrate-to-cpm-{now}";
@@ -241,6 +252,25 @@ namespace NuGroom.Workflows
 			}
 
 			return defaultBranch;
+		}
+
+		/// <summary>
+		/// Derives a target branch name for auto-creation when the target branch does not exist.
+		/// Returns <c>null</c> when the name cannot be determined (e.g. wildcard pattern).
+		/// </summary>
+		private static string? DeriveTargetBranchName(UpdateConfig? updateConfig, Microsoft.TeamFoundation.SourceControl.WebApi.GitRepository repository)
+		{
+			if (!string.IsNullOrEmpty(updateConfig?.TargetBranchPattern) && !updateConfig.TargetBranchPattern.Contains('*'))
+			{
+				return updateConfig.TargetBranchPattern;
+			}
+
+			if (!string.IsNullOrEmpty(repository.DefaultBranch))
+			{
+				return repository.DefaultBranch.Replace("refs/heads/", "");
+			}
+
+			return null;
 		}
 
 		/// <summary>
