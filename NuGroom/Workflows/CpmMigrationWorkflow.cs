@@ -248,13 +248,18 @@ namespace NuGroom.Workflows
 		/// </summary>
 		private static void PrintDryRunSummary(CpmMigrationResult result)
 		{
-			ConsoleWriter.Out.Cyan().WriteLine("  Dry-run mode — no changes will be pushed.").ResetColor();
+			ConsoleWriter.Out.Yellow().WriteLine("  DRY RUN — no changes will be made.").ResetColor();
 
 			foreach (var change in result.FileChanges)
 			{
 				var action = change.IsNew ? "CREATE" : "MODIFY";
 				ConsoleWriter.Out.WriteLine($"    [{action}] {change.FilePath}");
 			}
+
+			ConsoleWriter.Out.Yellow()
+				.WriteLine($"  Would create 1 feature branch and 1 pull request.")
+				.WriteLine("  Run without --dry-run to apply changes.")
+				.ResetColor();
 		}
 
 		/// <summary>
