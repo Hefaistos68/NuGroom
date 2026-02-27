@@ -24,17 +24,20 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
 ## Quick Start
 
 ```bash
+# Install as a global dotnet tool
+dotnet tool install --global NuGroom
+
 # Basic scan
-NuGroom --organization "https://dev.azure.com/yourorg" --token "your-pat-token"
+nugroom --organization "https://dev.azure.com/yourorg" --token "your-pat-token"
 
 # Using a config file (recommended)
-NuGroom --config settings.json
+nugroom --config settings.json
 
 # Dry-run package updates
-NuGroom --config settings.json --dry-run --update-scope Minor
+nugroom --config settings.json --dry-run --update-scope Minor
 
 # Apply updates (creates branches and PRs)
-NuGroom --config settings.json --update-references --update-scope Patch
+nugroom --config settings.json --update-references --update-scope Patch
 ```
 
 ### Prerequisites
@@ -57,6 +60,7 @@ NuGroom --config settings.json --update-references --update-scope Patch
 | [Renovate Compatibility](docs/renovate-compatibility.md) | Integration with Renovate configuration |
 | [Export Formats](docs/export-formats.md) | JSON, CSV, and SPDX 3.0.0 SBOM export |
 | [Output Examples](docs/samples.md) | Sample console output for common operations |
+| [Azure DevOps Pipelines](docs/azure-devops-pipeline.md) | Installation, pipeline examples, and `System.AccessToken` setup |
 | [Troubleshooting](docs/troubleshooting.md) | Debugging, security, performance, and known issues |
 
 ---

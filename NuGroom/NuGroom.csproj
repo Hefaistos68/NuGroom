@@ -5,9 +5,28 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PackAsTool>True</PackAsTool>
     <AssemblyVersion>0.1.0</AssemblyVersion>
+
+    <!-- .NET Tool packaging -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>nugroom</ToolCommandName>
+
+    <!-- NuGet package metadata -->
+    <PackageId>NuGroom</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Hefaistos68</Authors>
+    <Description>A dotnet tool that connects to Azure DevOps, scans repositories for NuGet package references, and provides analysis, version warnings, automated updates, package sync, and CPM migration with branch/PR workflows.</Description>
+    <PackageTags>nuget;azure-devops;package-management;dotnet-tool;cpm;sbom</PackageTags>
+    <PackageProjectUrl>https://github.com/Hefaistos68/NuGroom</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Hefaistos68/NuGroom</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\docs\*.md" Pack="true" PackagePath="docs\" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Remove="Properties\launchSettings.json" />
