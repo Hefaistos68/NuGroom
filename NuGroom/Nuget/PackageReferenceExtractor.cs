@@ -1077,7 +1077,7 @@ namespace NuGroom.Nuget
 
 			if (nugetInfo.Tags.Count > 0)
 			{
-				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Gray, $"  \U0001F3F7\uFE0F Tags: {string.Join(", ", nugetInfo.Tags.Take(5))}");
+				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Gray, $"  \U0001F3F7\uFE0F Tags: {string.Join(", ", ((IEnumerable<string>)nugetInfo.Tags).Take(5))}");
 			}
 		}
 
