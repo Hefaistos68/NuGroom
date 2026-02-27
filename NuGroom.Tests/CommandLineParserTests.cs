@@ -753,12 +753,30 @@ namespace NuGroom.Tests
 			var result = CommandLineParser.Parse(["--config", configPath]);
 
 			result.Config.ShouldNotBeNull();
-			result.Config.ExcludeRepositories.ShouldContain("Legacy-.*");
-			result.Config.IncludeRepositories.ShouldContain("Active-.*");
-		}
+				result.Config.ExcludeRepositories.ShouldContain("Legacy-.*");
+				result.Config.IncludeRepositories.ShouldContain("Active-.*");
+			}
 
-		[Test]
-		public void WhenConfigFileHasBooleanSettingsThenTheyAreApplied()
+			[Test]
+			public void WhenCliIncludeRepoProvidedThenConfigFileReposAreReplaced()
+			{
+				var configPath = Path.Combine(Path.GetTempPath(), $"nugroom-test-{Guid.NewGuid()}.json");
+				var config = new ToolConfig
+				{
+					Organization        = "https://dev.azure.com/org",
+					Token               = "token",
+					IncludeRepositories = ["ConfigRepo-A", "ConfigRepo-B"]
+				};
+				File.WriteAllText(configPath, JsonSerializer.Serialize(config));
+
+				var result = CommandLineParser.Parse(["--config", configPath, "--include-repo", "CliRepo-X"]);
+
+				result.Config.ShouldNotBeNull();
+				result.Config.IncludeRepositories.ShouldBe(["CliRepo-X"]);
+			}
+
+			[Test]
+			public void WhenConfigFileHasBooleanSettingsThenTheyAreApplied()
 		{
 			var configPath = Path.Combine(Path.GetTempPath(), $"nugroom-test-{Guid.NewGuid()}.json");
 			var config = new ToolConfig

@@ -817,15 +817,10 @@ namespace NuGroom
 				state.ExcludeRepositories.AddRange(fileConfig.ExcludeRepositories.Where(p => !state.ExcludeRepositories.Contains(p)));
 			}
 
-			if (fileConfig.IncludeRepositories?.Any() == true)
+			// CLI --include-repo replaces config-file repositories rather than merging
+			if (fileConfig.IncludeRepositories?.Any() == true && state.IncludeRepositories.Count == 0)
 			{
-				foreach (var repo in fileConfig.IncludeRepositories)
-				{
-					if (!state.IncludeRepositories.Contains(repo, StringComparer.OrdinalIgnoreCase))
-					{
-						state.IncludeRepositories.Add(repo);
-					}
-				}
+				state.IncludeRepositories.AddRange(fileConfig.IncludeRepositories);
 			}
 		}
 
