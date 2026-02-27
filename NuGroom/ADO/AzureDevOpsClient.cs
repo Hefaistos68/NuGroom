@@ -578,20 +578,24 @@ namespace NuGroom.ADO
 		/// <param name="featureBranchName">Name for the new branch (without refs/heads/ prefix).</param>
 		/// <param name="fileChanges">Dictionary of file path to new content.</param>
 		/// <param name="commitMessage">Commit message for the push.</param>
+		/// <param name="newFiles">Optional set of file paths that are new (use <c>Add</c> instead of <c>Edit</c>).</param>
 		/// <returns>A tuple containing the ref name of the created branch and the new commit object ID.</returns>
 		public async Task<(string BranchRef, string CommitId)> CreateBranchAndPushAsync(
 			GitRepository repository,
 			string sourceBranchObjectId,
 			string featureBranchName,
 			Dictionary<string, string> fileChanges,
-			string commitMessage)
+			string commitMessage,
+			HashSet<string>? newFiles = null)
 		{
 			var newBranchRef = $"refs/heads/{featureBranchName}";
 			Logger.Debug($"Creating branch '{newBranchRef}' in {repository.Name} from {sourceBranchObjectId}");
 
 			var changes = fileChanges.Select(kvp => new GitChange
 			{
-				ChangeType = VersionControlChangeType.Edit,
+				ChangeType = newFiles?.Contains(kvp.Key) == true
+					? VersionControlChangeType.Add
+					: VersionControlChangeType.Edit,
 				Item = new GitItem { Path = kvp.Key },
 				NewContent = new ItemContent
 				{
@@ -629,6 +633,46 @@ namespace NuGroom.ADO
 			Logger.Info($"Created branch '{newBranchRef}' with {fileChanges.Count} file(s) in {repository.Name}");
 
 			return (newBranchRef, newCommitId);
+		}
+
+		/// <summary>
+		/// Creates a branch pointing at the specified commit without pushing any file changes.
+		/// </summary>
+		/// <param name="repository">The target repository.</param>
+		/// <param name="sourceBranchObjectId">The commit object ID the new branch should point to.</param>
+		/// <param name="branchName">Branch name (without <c>refs/heads/</c> prefix).</param>
+		/// <returns>The full ref name and object ID of the created branch.</returns>
+		public async Task<(string RefName, string ObjectId)> CreateBranchAsync(
+			GitRepository repository,
+			string sourceBranchObjectId,
+			string branchName)
+		{
+			ArgumentNullException.ThrowIfNull(repository);
+
+			if (string.IsNullOrWhiteSpace(sourceBranchObjectId))
+			{
+				throw new ArgumentException("Source branch object ID is required.", nameof(sourceBranchObjectId));
+			}
+
+			if (string.IsNullOrWhiteSpace(branchName))
+			{
+				throw new ArgumentException("Branch name is required.", nameof(branchName));
+			}
+
+			var branchRef = $"refs/heads/{branchName}";
+			Logger.Debug($"Creating branch '{branchRef}' at {sourceBranchObjectId} in {repository.Name}");
+
+			var refUpdate = new GitRefUpdate
+			{
+				Name = branchRef,
+				NewObjectId = sourceBranchObjectId,
+				OldObjectId = "0000000000000000000000000000000000000000"
+			};
+
+			await _gitClient.UpdateRefsAsync(new[] { refUpdate }, repository.Id);
+			Logger.Info($"Created branch '{branchRef}' in {repository.Name}");
+
+			return (branchRef, sourceBranchObjectId);
 		}
 
 		/// <summary>

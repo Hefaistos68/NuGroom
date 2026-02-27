@@ -18,6 +18,9 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
   - Merges CPM versions into project references that omit inline `Version` attributes
   - Respects `VersionOverride` in individual project files
   - Updates target `Directory.Packages.props` instead of individual project files
+  - **CPM Migration** (`--migrate-to-cpm`): migrate projects to Central Package Management by generating `Directory.Packages.props` and removing inline versions
+  - Per-project mode (`--per-project`): create a `Directory.Packages.props` alongside each project instead of at the repository root
+  - Automatic version conflict resolution with `VersionOverride` and warnings
 - **Legacy packages.config Support** (opt-in):
   - Parses `<package id="..." version="..."/>` entries from `packages.config` files
   - Associates each `packages.config` with its co-located project file
@@ -216,6 +219,21 @@ NuGroom --config settings.json --sync Newtonsoft.Json 13.0.1
 NuGroom --config settings.json --sync Newtonsoft.Json 13.0.1 --dry-run
 ```
 
+### Migrate to Central Package Management (Dry-Run Preview)
+```bash
+NuGroom --config settings.json --migrate-to-cpm --dry-run
+```
+
+### Migrate to Central Package Management (Creates Branches and PRs)
+```bash
+NuGroom --config settings.json --migrate-to-cpm --update-references
+```
+
+### Migrate to CPM with Per-Project Props Files
+```bash
+NuGroom --config settings.json --migrate-to-cpm --per-project --dry-run
+```
+
 ### Exclude Test Projects
 ```bash
 NuGroom --config settings.json --exclude-project ".*\.Test[s]?\.csproj$"
@@ -333,6 +351,12 @@ Version properties that do not exist in a project file are left unchanged.
 |--------|-------------|---------|
 | `--sync <package> [version]` | Sync a specific package to a version across all repositories (creates PRs) | |
 |  | If version is omitted, the latest available version from feeds is used | |
+
+### CPM Migration Options
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--migrate-to-cpm` | Migrate projects to use Central Package Management (`Directory.Packages.props`) | |
+| `--per-project` | Create a `Directory.Packages.props` per project instead of per repository (only valid with `--migrate-to-cpm`) | |
 
 ### Help
 | Option | Short | Description |
@@ -762,6 +786,93 @@ The tool automatically detects and supports [Central Package Management](https:/
 When CPM is active, package version updates target `Directory.Packages.props` instead of individual project files. This means a single update to the central props file can update the version for all projects in the repository.
 
 No configuration is needed — CPM detection is automatic.
+
+### Migrating to CPM
+
+For repositories that do not yet use Central Package Management, the `--migrate-to-cpm` option generates a `Directory.Packages.props` file and updates all project files to remove inline `Version` attributes.
+
+**Dry-run preview:**
+```bash
+NuGroom --config settings.json --migrate-to-cpm --dry-run
+```
+
+**Apply migration (creates branches and PRs):**
+```bash
+NuGroom --config settings.json --migrate-to-cpm --update-references
+```
+
+#### How Migration Works
+
+1. All scanned project files with explicit `<PackageReference ... Version="..."/>` are collected
+2. Package versions are merged across projects — the **highest version** of each package becomes the central version in `Directory.Packages.props`
+3. If different projects reference **different versions** of the same package, the project with the lower version receives a `VersionOverride` attribute and a warning is emitted
+4. A `Directory.Packages.props` file is created at the repository root (or per project with `--per-project`)
+5. Each project file is modified to remove inline `Version` attributes from `<PackageReference>` elements
+
+#### Version Conflict Resolution
+
+When multiple projects reference different versions of the same package, the migration resolves the conflict as follows:
+
+- The **highest version** is used as the central version in `Directory.Packages.props`
+- Projects using a **lower version** receive a `VersionOverride` attribute to preserve their current version
+- A warning is emitted for each conflict, stating the package name, project, and both versions
+
+For example, given two projects:
+- `App1.csproj` references `Newtonsoft.Json` version `13.0.3`
+- `App2.csproj` references `Newtonsoft.Json` version `12.0.0`
+
+The migration produces:
+
+**Directory.Packages.props** (central version: highest)
+```xml
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>
+```
+
+**App1.csproj** (version removed — uses central version)
+```xml
+<PackageReference Include="Newtonsoft.Json" />
+```
+
+**App2.csproj** (gets VersionOverride to preserve lower version)
+```xml
+<PackageReference Include="Newtonsoft.Json" VersionOverride="12.0.0" />
+```
+
+**Warning emitted:**
+```
+Version conflict: package 'Newtonsoft.Json' in project 'src/App2/App2.csproj'
+  uses version 12.0.0 (VersionOverride) while central version is 13.0.3
+```
+
+#### Per-Project Mode
+
+By default, `--migrate-to-cpm` creates a single `Directory.Packages.props` at the repository root. Use `--per-project` to create a separate file alongside each project file instead:
+
+```bash
+NuGroom --config settings.json --migrate-to-cpm --per-project --dry-run
+```
+
+In per-project mode:
+- Each project gets its own `Directory.Packages.props` in the same directory
+- No version conflicts occur because each project manages its own versions independently
+- This is useful for repositories where projects have intentionally different package versions
+
+#### Target Branch Auto-Creation
+
+When the CPM migration creates pull requests and the configured target branch does not exist, the tool automatically creates it from the source branch instead of skipping the repository.
+
+- If `TargetBranchPattern` is an exact branch name (no wildcards), it is created as a new branch from the source branch
+- If no target pattern is configured, the repository's default branch name is used
+- Wildcard patterns (e.g. `release/*`) that match no branches cannot be auto-created and will still skip
+
+This allows migrations to target branches that do not yet exist, for example when introducing a new branching strategy alongside the CPM migration.
 
 ## Legacy packages.config Support
 

@@ -753,12 +753,30 @@ namespace NuGroom.Tests
 			var result = CommandLineParser.Parse(["--config", configPath]);
 
 			result.Config.ShouldNotBeNull();
-			result.Config.ExcludeRepositories.ShouldContain("Legacy-.*");
-			result.Config.IncludeRepositories.ShouldContain("Active-.*");
-		}
+				result.Config.ExcludeRepositories.ShouldContain("Legacy-.*");
+				result.Config.IncludeRepositories.ShouldContain("Active-.*");
+			}
 
-		[Test]
-		public void WhenConfigFileHasBooleanSettingsThenTheyAreApplied()
+			[Test]
+			public void WhenCliIncludeRepoProvidedThenConfigFileReposAreReplaced()
+			{
+				var configPath = Path.Combine(Path.GetTempPath(), $"nugroom-test-{Guid.NewGuid()}.json");
+				var config = new ToolConfig
+				{
+					Organization        = "https://dev.azure.com/org",
+					Token               = "token",
+					IncludeRepositories = ["ConfigRepo-A", "ConfigRepo-B"]
+				};
+				File.WriteAllText(configPath, JsonSerializer.Serialize(config));
+
+				var result = CommandLineParser.Parse(["--config", configPath, "--include-repo", "CliRepo-X"]);
+
+				result.Config.ShouldNotBeNull();
+				result.Config.IncludeRepositories.ShouldBe(["CliRepo-X"]);
+			}
+
+			[Test]
+			public void WhenConfigFileHasBooleanSettingsThenTheyAreApplied()
 		{
 			var configPath = Path.Combine(Path.GetTempPath(), $"nugroom-test-{Guid.NewGuid()}.json");
 			var config = new ToolConfig
@@ -1414,6 +1432,63 @@ namespace NuGroom.Tests
 			result.UpdateConfig.ShouldNotBeNull();
 			result.UpdateConfig.VersionIncrement.ShouldNotBeNull();
 			result.UpdateConfig.VersionIncrement.Scope.ShouldBe(VersionIncrementScope.Patch);
+		}
+
+		// ── CPM Migration Options ─────────────────────────────────────
+
+		[Test]
+		public void WhenMigrateToCpmThenFlagIsTrue()
+		{
+			var args = MinimalValidArgs.Concat(["--migrate-to-cpm"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldNotBeNull();
+			result.MigrateToCpm.ShouldBeTrue();
+			result.PerProject.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenMigrateToCpmWithPerProjectThenBothFlagsAreTrue()
+		{
+			var args = MinimalValidArgs.Concat(["--migrate-to-cpm", "--per-project"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldNotBeNull();
+			result.MigrateToCpm.ShouldBeTrue();
+			result.PerProject.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenPerProjectWithoutMigrateToCpmThenConfigIsNull()
+		{
+			var args = MinimalValidArgs.Concat(["--per-project"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenNoMigrateToCpmThenFlagIsFalse()
+		{
+			var result = CommandLineParser.Parse(MinimalValidArgs);
+
+			result.MigrateToCpm.ShouldBeFalse();
+			result.PerProject.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenPerProjectAndMigrateToCpmInReverseOrderThenBothFlagsAreTrue()
+		{
+			var args = MinimalValidArgs.Concat(["--per-project", "--migrate-to-cpm"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldNotBeNull();
+			result.MigrateToCpm.ShouldBeTrue();
+			result.PerProject.ShouldBeTrue();
 		}
 	}
 }
