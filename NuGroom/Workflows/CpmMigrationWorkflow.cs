@@ -174,8 +174,13 @@ namespace NuGroom.Workflows
 			var featureBranch = $"feature/migrate-to-cpm-{now}";
 			var commitMessage = "chore: migrate to Central Package Management (Directory.Packages.props)";
 
-			var (branchRef, _) = await client.CreateBranchAndPushAsync(
-				repository, sourceBranch.Value.ObjectId, featureBranch, fileChanges, commitMessage);
+			var newFilePaths = result.FileChanges
+					.Where(f => f.IsNew)
+					.Select(f => f.FilePath)
+					.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+				var (branchRef, _) = await client.CreateBranchAndPushAsync(
+					repository, sourceBranch.Value.ObjectId, featureBranch, fileChanges, commitMessage, newFilePaths);
 
 			ConsoleWriter.Out.Green().WriteLine($"  Created branch: {branchRef}").ResetColor();
 

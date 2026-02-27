@@ -578,20 +578,24 @@ namespace NuGroom.ADO
 		/// <param name="featureBranchName">Name for the new branch (without refs/heads/ prefix).</param>
 		/// <param name="fileChanges">Dictionary of file path to new content.</param>
 		/// <param name="commitMessage">Commit message for the push.</param>
+		/// <param name="newFiles">Optional set of file paths that are new (use <c>Add</c> instead of <c>Edit</c>).</param>
 		/// <returns>A tuple containing the ref name of the created branch and the new commit object ID.</returns>
 		public async Task<(string BranchRef, string CommitId)> CreateBranchAndPushAsync(
 			GitRepository repository,
 			string sourceBranchObjectId,
 			string featureBranchName,
 			Dictionary<string, string> fileChanges,
-			string commitMessage)
+			string commitMessage,
+			HashSet<string>? newFiles = null)
 		{
 			var newBranchRef = $"refs/heads/{featureBranchName}";
 			Logger.Debug($"Creating branch '{newBranchRef}' in {repository.Name} from {sourceBranchObjectId}");
 
 			var changes = fileChanges.Select(kvp => new GitChange
 			{
-				ChangeType = VersionControlChangeType.Edit,
+				ChangeType = newFiles?.Contains(kvp.Key) == true
+					? VersionControlChangeType.Add
+					: VersionControlChangeType.Edit,
 				Item = new GitItem { Path = kvp.Key },
 				NewContent = new ItemContent
 				{
