@@ -25,6 +25,13 @@ namespace NuGroom.Workflows
 			UpdateConfig updateConfig,
 			Dictionary<string, RenovateOverrides> renovateOverrides)
 		{
+			if (!updateConfig.IsRequested)
+			{
+				return;
+			}
+
+			ConsoleWriter.Out.WriteLine("Preparing update workflow.");
+
 			updateConfig.ValidateReviewers();
 
 			var updater = new PackageReferenceUpdater(updateConfig.Scope, updateConfig.PinnedPackages, updateConfig.SourcePackagesOnly);

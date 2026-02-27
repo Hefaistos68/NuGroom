@@ -135,6 +135,12 @@ namespace NuGroom.Configuration
 	public class UpdateConfig
 	{
 		/// <summary>
+		/// Indicates whether updates were explicitly requested (e.g. via CLI flags such as --update-references or --dry-run).
+		/// Configuration alone should not trigger updates when this flag is false.
+		/// </summary>
+		public bool IsRequested { get; set; }
+
+		/// <summary>
 		/// The scope of updates to apply (Patch, Minor, or Major)
 		/// </summary>
 		[JsonConverter(typeof(JsonStringEnumConverter))]

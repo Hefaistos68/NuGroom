@@ -80,6 +80,18 @@ namespace NuGroom
 			public bool VersionIncrementExplicit { get; set; }
 		}
 
+		private static UpdateConfig EnsureUpdateConfig(CliParsingState state, bool markRequested = false)
+		{
+			state.UpdateConfig ??= new UpdateConfig();
+
+			if (markRequested)
+			{
+				state.UpdateConfig.IsRequested = true;
+			}
+
+			return state.UpdateConfig;
+		}
+
 		/// <summary>
 		/// Parses command line arguments and optional configuration file producing a consolidated parse result.
 		/// Validates required parameters and applies exclusion settings.
@@ -375,13 +387,13 @@ namespace NuGroom
 						i++;
 						break;
 					case "--update-references":
-						state.UpdateConfig ??= new UpdateConfig();
-						state.UpdateConfig.DryRun = false;
+						var updateRefsConfig = EnsureUpdateConfig(state, markRequested: true);
+						updateRefsConfig.DryRun = false;
 						state.DryRunExplicit = true;
 						break;
 					case "--dry-run":
-						state.UpdateConfig ??= new UpdateConfig();
-						state.UpdateConfig.DryRun = true;
+						var dryRunConfig = EnsureUpdateConfig(state, markRequested: true);
+						dryRunConfig.DryRun = true;
 						state.RequestedDryRun = true;
 						state.DryRunExplicit = true;
 						break;
@@ -391,8 +403,8 @@ namespace NuGroom
 					case "--source-branch":
 						if (i + 1 < args.Length)
 						{
-							state.UpdateConfig ??= new UpdateConfig();
-							state.UpdateConfig.SourceBranchPattern = args[++i];
+							var update = EnsureUpdateConfig(state);
+							update.SourceBranchPattern = args[++i];
 							state.SourceBranchExplicit = true;
 						}
 
@@ -400,8 +412,8 @@ namespace NuGroom
 					case "--target-branch":
 						if (i + 1 < args.Length)
 						{
-							state.UpdateConfig ??= new UpdateConfig();
-							state.UpdateConfig.TargetBranchPattern = args[++i];
+							var update = EnsureUpdateConfig(state);
+							update.TargetBranchPattern = args[++i];
 							state.TargetBranchExplicit = true;
 						}
 
@@ -409,43 +421,43 @@ namespace NuGroom
 					case "--feature-branch":
 						if (i + 1 < args.Length)
 						{
-							state.UpdateConfig ??= new UpdateConfig();
-							state.UpdateConfig.FeatureBranchName = args[++i];
+							var update = EnsureUpdateConfig(state);
+							update.FeatureBranchName = args[++i];
 							state.FeatureBranchExplicit = true;
 						}
 
 						break;
 					case "--source-packages-only":
-						state.UpdateConfig ??= new UpdateConfig();
-						state.UpdateConfig.SourcePackagesOnly = true;
+						var updateSourceOnly = EnsureUpdateConfig(state);
+						updateSourceOnly.SourcePackagesOnly = true;
 						state.SourcePackagesOnlyExplicit = true;
 						break;
 					case "--required-reviewer":
 						if (i + 1 < args.Length)
 						{
-							state.UpdateConfig ??= new UpdateConfig();
-							state.UpdateConfig.RequiredReviewers ??= new List<string>();
-							state.UpdateConfig.RequiredReviewers.Add(args[++i]);
+							var update = EnsureUpdateConfig(state);
+							update.RequiredReviewers ??= new List<string>();
+							update.RequiredReviewers.Add(args[++i]);
 						}
 
 						break;
 					case "--optional-reviewer":
 						if (i + 1 < args.Length)
 						{
-							state.UpdateConfig ??= new UpdateConfig();
-							state.UpdateConfig.OptionalReviewers ??= new List<string>();
-							state.UpdateConfig.OptionalReviewers.Add(args[++i]);
+							var update = EnsureUpdateConfig(state);
+							update.OptionalReviewers ??= new List<string>();
+							update.OptionalReviewers.Add(args[++i]);
 						}
 
 						break;
 					case "--tag-commits":
-						state.UpdateConfig ??= new UpdateConfig();
-						state.UpdateConfig.TagCommits = true;
+						var updateTag = EnsureUpdateConfig(state);
+						updateTag.TagCommits = true;
 						state.TagCommitsExplicit = true;
 						break;
 					case "--no-incremental-prs":
-						state.UpdateConfig ??= new UpdateConfig();
-						state.UpdateConfig.NoIncrementalPrs = true;
+						var updateNoIncr = EnsureUpdateConfig(state);
+						updateNoIncr.NoIncrementalPrs = true;
 						state.NoIncrementalPrsExplicit = true;
 						break;
 					case "--ignore-renovate":
@@ -472,28 +484,28 @@ namespace NuGroom
 
 						break;
 					case "--increment-project-version":
-						state.UpdateConfig ??= new UpdateConfig();
+						EnsureUpdateConfig(state);
 						state.VersionIncrement ??= new VersionIncrementConfig();
 						state.VersionIncrement.IncrementVersion = true;
 						state.VersionIncrementExplicit = true;
 						ParseOptionalVersionIncrementScope(args, ref i, state.VersionIncrement);
 						break;
 					case "--increment-project-assemblyversion":
-						state.UpdateConfig ??= new UpdateConfig();
+						EnsureUpdateConfig(state);
 						state.VersionIncrement ??= new VersionIncrementConfig();
 						state.VersionIncrement.IncrementAssemblyVersion = true;
 						state.VersionIncrementExplicit = true;
 						ParseOptionalVersionIncrementScope(args, ref i, state.VersionIncrement);
 						break;
 					case "--increment-project-fileversion":
-						state.UpdateConfig ??= new UpdateConfig();
+						EnsureUpdateConfig(state);
 						state.VersionIncrement ??= new VersionIncrementConfig();
 						state.VersionIncrement.IncrementFileVersion = true;
 						state.VersionIncrementExplicit = true;
 						ParseOptionalVersionIncrementScope(args, ref i, state.VersionIncrement);
 						break;
 					case "--increment-project-version-all":
-						state.UpdateConfig ??= new UpdateConfig();
+						EnsureUpdateConfig(state);
 						state.VersionIncrement ??= new VersionIncrementConfig();
 						state.VersionIncrement.EnableAll();
 						state.VersionIncrementExplicit = true;
@@ -566,11 +578,11 @@ namespace NuGroom
 				var scopeStr = args[++i];
 
 				if (Enum.TryParse<UpdateScope>(scopeStr, ignoreCase: true, out var scope))
-					{
-						state.UpdateConfig ??= new UpdateConfig();
-						state.UpdateConfig.Scope = scope;
-						state.UpdateScopeExplicit = true;
-					}
+				{
+					var update = EnsureUpdateConfig(state);
+					update.Scope = scope;
+					state.UpdateScopeExplicit = true;
+				}
 				else
 				{
 					Console.WriteLine($"Warning: Invalid update scope '{scopeStr}'. Use Patch, Minor, or Major.");
@@ -891,15 +903,15 @@ namespace NuGroom
 		{
 			var azConfig = new AzureDevOpsConfig
 			{
-				OrganizationUrl             = state.Organization!,
-				PersonalAccessToken         = state.Token!,
-				ProjectName                 = state.Project,
-				MaxRepositories             = state.MaxRepos,
+				OrganizationUrl = state.Organization!,
+				PersonalAccessToken = state.Token!,
+				ProjectName = state.Project,
+				MaxRepositories = state.MaxRepos,
 				IncludeArchivedRepositories = state.IncludeArchived ?? false,
-				ExcludeProjectPatterns      = state.ExcludeProjectPatterns,
+				ExcludeProjectPatterns = state.ExcludeProjectPatterns,
 				CaseSensitiveProjectFilters = state.CaseSensitiveProjectFilters ?? false,
-				ExcludeRepositories         = state.ExcludeRepositories,
-				IncludeRepositories         = state.IncludeRepositories
+				ExcludeRepositories = state.ExcludeRepositories,
+				IncludeRepositories = state.IncludeRepositories
 			};
 
 			// Wire CLI version increment config into UpdateConfig if set explicitly
