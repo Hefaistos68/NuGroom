@@ -24,7 +24,9 @@ namespace NuGroom
 		VersionWarningConfig? VersionWarningConfig,
 		UpdateConfig? UpdateConfig,
 		List<SyncConfig> SyncConfigs,
-		bool IncludePackagesConfig = false);
+		bool IncludePackagesConfig = false,
+		bool MigrateToCpm = false,
+		bool PerProject = false);
 
 	/// <summary>
 	/// Parses and validates command line arguments and optional configuration files
@@ -78,6 +80,8 @@ namespace NuGroom
 			public List<SyncConfig> SyncConfigs { get; } = new();
 			public VersionIncrementConfig? VersionIncrement { get; set; }
 			public bool VersionIncrementExplicit { get; set; }
+			public bool MigrateToCpm { get; set; }
+			public bool PerProject { get; set; }
 		}
 
 		private static UpdateConfig EnsureUpdateConfig(CliParsingState state, bool markRequested = false)
@@ -511,6 +515,12 @@ namespace NuGroom
 						state.VersionIncrementExplicit = true;
 						ParseOptionalVersionIncrementScope(args, ref i, state.VersionIncrement);
 						break;
+					case "--migrate-to-cpm":
+						state.MigrateToCpm = true;
+						break;
+					case "--per-project":
+						state.PerProject = true;
+						break;
 					default:
 						Console.WriteLine($"Error: Unknown argument '{args[i]}'");
 						ShowHelp();
@@ -869,6 +879,14 @@ namespace NuGroom
 				return CreateErrorParseResult(state, exclusionList);
 			}
 
+			if (state.PerProject && !state.MigrateToCpm)
+			{
+				Console.WriteLine("Error: --per-project is only valid when --migrate-to-cpm is specified");
+				ShowHelp();
+
+				return CreateErrorParseResult(state, exclusionList);
+			}
+
 			return null;
 		}
 
@@ -936,7 +954,9 @@ namespace NuGroom
 				VersionWarningConfig: state.VersionWarningConfig,
 				UpdateConfig: state.UpdateConfig,
 				SyncConfigs: state.SyncConfigs,
-				IncludePackagesConfig: state.IncludePackagesConfig ?? false);
+				IncludePackagesConfig: state.IncludePackagesConfig ?? false,
+				MigrateToCpm: state.MigrateToCpm,
+				PerProject: state.PerProject);
 		}
 
 		/// <summary>
@@ -1007,6 +1027,11 @@ namespace NuGroom
 			Console.WriteLine("  --sync <package> [version]   Sync a specific package to a version across all repos (creates PRs)");
 			Console.WriteLine("                               If version is omitted, the latest available version is used");
 			Console.WriteLine("                               Repeatable: specify multiple --sync flags to sync several packages");
+			Console.WriteLine();
+			Console.WriteLine("CPM Migration Options:");
+			Console.WriteLine("  --migrate-to-cpm             Migrate projects to use Central Package Management (Directory.Packages.props)");
+			Console.WriteLine("  --per-project                Create a Directory.Packages.props per project instead of per repository");
+			Console.WriteLine("                               (only valid with --migrate-to-cpm)");
 			Console.WriteLine();
 			Console.WriteLine("For detailed help, see README.md");
 		}

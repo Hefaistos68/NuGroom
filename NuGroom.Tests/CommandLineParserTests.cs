@@ -1415,5 +1415,62 @@ namespace NuGroom.Tests
 			result.UpdateConfig.VersionIncrement.ShouldNotBeNull();
 			result.UpdateConfig.VersionIncrement.Scope.ShouldBe(VersionIncrementScope.Patch);
 		}
+
+		// ── CPM Migration Options ─────────────────────────────────────
+
+		[Test]
+		public void WhenMigrateToCpmThenFlagIsTrue()
+		{
+			var args = MinimalValidArgs.Concat(["--migrate-to-cpm"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldNotBeNull();
+			result.MigrateToCpm.ShouldBeTrue();
+			result.PerProject.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenMigrateToCpmWithPerProjectThenBothFlagsAreTrue()
+		{
+			var args = MinimalValidArgs.Concat(["--migrate-to-cpm", "--per-project"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldNotBeNull();
+			result.MigrateToCpm.ShouldBeTrue();
+			result.PerProject.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenPerProjectWithoutMigrateToCpmThenConfigIsNull()
+		{
+			var args = MinimalValidArgs.Concat(["--per-project"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenNoMigrateToCpmThenFlagIsFalse()
+		{
+			var result = CommandLineParser.Parse(MinimalValidArgs);
+
+			result.MigrateToCpm.ShouldBeFalse();
+			result.PerProject.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenPerProjectAndMigrateToCpmInReverseOrderThenBothFlagsAreTrue()
+		{
+			var args = MinimalValidArgs.Concat(["--per-project", "--migrate-to-cpm"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldNotBeNull();
+			result.MigrateToCpm.ShouldBeTrue();
+			result.PerProject.ShouldBeTrue();
+		}
 	}
 }
