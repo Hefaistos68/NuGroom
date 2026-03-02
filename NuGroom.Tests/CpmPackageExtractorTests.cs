@@ -312,5 +312,154 @@ namespace NuGroom.Tests
 			sl.Version.ShouldBe("3.1.1");
 			sl.SourceKind.ShouldBe(PackageSourceKind.CentralPackageManagement);
 		}
+
+		[Test]
+		public void WhenVersionUsesSimpleVariableThenVariableIsResolved()
+		{
+			var xml = """
+				<Project>
+				  <PropertyGroup>
+					<NetCoreVersion>10.0.0</NetCoreVersion>
+				  </PropertyGroup>
+				  <ItemGroup>
+					<PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(NetCoreVersion)" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var result = CpmPackageExtractor.Parse(xml);
+
+			result.PackageVersions.Count.ShouldBe(1);
+			result.PackageVersions["Microsoft.Extensions.Hosting"].ShouldBe("10.0.0");
+		}
+
+		[Test]
+		public void WhenVersionUsesNestedVariablesThenAllVariablesAreResolved()
+		{
+			var xml = """
+				<Project>
+				  <PropertyGroup>
+					<MajorVersion>13</MajorVersion>
+					<MinorVersion>0</MinorVersion>
+					<PatchVersion>3</PatchVersion>
+					<FullVersion>$(MajorVersion).$(MinorVersion).$(PatchVersion)</FullVersion>
+				  </PropertyGroup>
+				  <ItemGroup>
+					<PackageVersion Include="Newtonsoft.Json" Version="$(FullVersion)" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var result = CpmPackageExtractor.Parse(xml);
+
+			result.PackageVersions.Count.ShouldBe(1);
+			result.PackageVersions["Newtonsoft.Json"].ShouldBe("13.0.3");
+		}
+
+		[Test]
+		public void WhenVariableIsUndefinedThenOriginalTextIsKept()
+		{
+			var xml = """
+				<Project>
+				  <ItemGroup>
+					<PackageVersion Include="Newtonsoft.Json" Version="$(UndefinedVersion)" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var result = CpmPackageExtractor.Parse(xml);
+
+			result.PackageVersions.Count.ShouldBe(1);
+			result.PackageVersions["Newtonsoft.Json"].ShouldBe("$(UndefinedVersion)");
+		}
+
+		[Test]
+		public void WhenMixedLiteralAndVariableVersionsThenBothHandledCorrectly()
+		{
+			var xml = """
+				<Project>
+				  <PropertyGroup>
+					<NetCoreVersion>10.0.0</NetCoreVersion>
+				  </PropertyGroup>
+				  <ItemGroup>
+					<PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(NetCoreVersion)" />
+					<PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+					<PackageVersion Include="Serilog" Version="3.1.1" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var result = CpmPackageExtractor.Parse(xml);
+
+			result.PackageVersions.Count.ShouldBe(3);
+			result.PackageVersions["Microsoft.Extensions.Hosting"].ShouldBe("10.0.0");
+			result.PackageVersions["Newtonsoft.Json"].ShouldBe("13.0.3");
+			result.PackageVersions["Serilog"].ShouldBe("3.1.1");
+		}
+
+		[Test]
+		public void WhenMultiplePropertyGroupsThenAllPropertiesAreExtracted()
+		{
+			var xml = """
+				<Project>
+				  <PropertyGroup>
+					<NetCoreVersion>10.0.0</NetCoreVersion>
+				  </PropertyGroup>
+				  <PropertyGroup>
+					<JsonVersion>13.0.3</JsonVersion>
+				  </PropertyGroup>
+				  <ItemGroup>
+					<PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(NetCoreVersion)" />
+					<PackageVersion Include="Newtonsoft.Json" Version="$(JsonVersion)" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var result = CpmPackageExtractor.Parse(xml);
+
+			result.PackageVersions.Count.ShouldBe(2);
+			result.PackageVersions["Microsoft.Extensions.Hosting"].ShouldBe("10.0.0");
+			result.PackageVersions["Newtonsoft.Json"].ShouldBe("13.0.3");
+		}
+
+		[Test]
+		public void WhenVariablesAreCaseInsensitiveThenResolutionWorks()
+		{
+			var xml = """
+				<Project>
+				  <PropertyGroup>
+					<NetCoreVersion>10.0.0</NetCoreVersion>
+				  </PropertyGroup>
+				  <ItemGroup>
+					<PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(netcoreversion)" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var result = CpmPackageExtractor.Parse(xml);
+
+			result.PackageVersions.Count.ShouldBe(1);
+			result.PackageVersions["Microsoft.Extensions.Hosting"].ShouldBe("10.0.0");
+		}
+
+		[Test]
+		public void WhenVersionContainsPartialVariableThenOnlyVariableIsResolved()
+		{
+			var xml = """
+				<Project>
+				  <PropertyGroup>
+					<MajorVersion>13</MajorVersion>
+				  </PropertyGroup>
+				  <ItemGroup>
+					<PackageVersion Include="Newtonsoft.Json" Version="$(MajorVersion).0.3" />
+				  </ItemGroup>
+				</Project>
+				""";
+
+			var result = CpmPackageExtractor.Parse(xml);
+
+			result.PackageVersions.Count.ShouldBe(1);
+			result.PackageVersions["Newtonsoft.Json"].ShouldBe("13.0.3");
+		}
 	}
 }
