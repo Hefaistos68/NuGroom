@@ -23,6 +23,7 @@
   <ItemGroup>
     <Content Include="$(IntermediateOutputPath)toolpack\NuGroom.*.nupkg">
       <IncludeInVSIX>true</IncludeInVSIX>
+      <Link>NuGroom.*.nupkg</Link>
     </Content>
   </ItemGroup>
 
