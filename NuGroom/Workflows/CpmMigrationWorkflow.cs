@@ -96,11 +96,10 @@ namespace NuGroom.Workflows
 				return;
 			}
 
-			// Enumerate all project files directly from the repository so that projects
-			// whose packages were excluded during scanning are still included in the
-			// migration. GetProjectFilesAsync already respects repository and project
-			// exclusion/inclusion rules.
-			var projectFiles = await client.GetProjectFilesAsync(repository);
+			// Enumerate all project files from the source branch so that the file list
+			// matches the branch being migrated. GetProjectFilesAsync already respects
+			// repository and project exclusion/inclusion rules.
+			var projectFiles = await client.GetProjectFilesAsync(repository, sourceBranch.Value.RefName);
 			var projectContents = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
 			foreach (var projectFile in projectFiles)
@@ -124,17 +123,22 @@ namespace NuGroom.Workflows
 			}
 
 			// Extract all package references from the project contents without any
-			// package exclusion filters so that every package is included in the CPM migration.
-			var extractor = new PackageReferenceExtractor(PackageReferenceExtractor.ExclusionList.CreateEmpty());
-			var allReferences = new List<PackageReferenceExtractor.PackageReference>();
+				// package exclusion filters so that every package is included in the CPM migration.
+				var extractor = new PackageReferenceExtractor(PackageReferenceExtractor.ExclusionList.CreateEmpty());
+				var allReferences = new List<PackageReferenceExtractor.PackageReference>();
 
-			foreach (var (projectPath, content) in projectContents)
-			{
-				allReferences.AddRange(extractor.ExtractPackageReferences(content, repository.Name, projectPath));
-			}
+				foreach (var (projectPath, content) in projectContents)
+				{
+					allReferences.AddRange(extractor.ExtractPackageReferences(content, repository.Name, projectPath));
+				}
 
-			// Generate migration
-			var result = CpmMigrationGenerator.Migrate(allReferences, projectContents, perProject);
+				// Discover existing Directory.Packages.props files so that the migration
+				// merges with them instead of overwriting their content.
+				var existingPropsContents = await DiscoverExistingPropsAsync(
+					client, repository, sourceBranch.Value.RefName, projectContents.Keys, perProject);
+
+				// Generate migration
+				var result = CpmMigrationGenerator.Migrate(allReferences, projectContents, perProject, existingPropsContents);
 
 			// Print warnings for version conflicts
 			foreach (var conflict in result.Conflicts)
@@ -166,21 +170,21 @@ namespace NuGroom.Workflows
 
 			var targetBranch = await ResolveTargetBranchAsync(client, repository, updateConfig);
 
-				if (targetBranch == null)
+			if (targetBranch == null)
+			{
+				var targetBranchName = DeriveTargetBranchName(updateConfig, repository);
+
+				if (targetBranchName == null)
 				{
-					var targetBranchName = DeriveTargetBranchName(updateConfig, repository);
+					ConsoleWriter.Out.Yellow().WriteLine("  Could not determine target branch name. Skipping.").ResetColor();
 
-					if (targetBranchName == null)
-					{
-						ConsoleWriter.Out.Yellow().WriteLine("  Could not determine target branch name. Skipping.").ResetColor();
-
-						return;
-					}
-
-					ConsoleWriter.Out.WriteLine($"  Target branch not found, creating '{targetBranchName}' from source branch...");
-					targetBranch = await client.CreateBranchAsync(repository, sourceBranch.Value.ObjectId, targetBranchName);
-					ConsoleWriter.Out.Green().WriteLine($"  Created target branch: {targetBranch.Value.RefName}").ResetColor();
+					return;
 				}
+
+				ConsoleWriter.Out.WriteLine($"  Target branch not found, creating '{targetBranchName}' from source branch...");
+				targetBranch = await client.CreateBranchAsync(repository, sourceBranch.Value.ObjectId, targetBranchName);
+				ConsoleWriter.Out.Green().WriteLine($"  Created target branch: {targetBranch.Value.RefName}").ResetColor();
+			}
 
 			var now = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
 			var featureBranch = $"feature/migrate-to-cpm-{now}";
@@ -191,8 +195,8 @@ namespace NuGroom.Workflows
 					.Select(f => f.FilePath)
 					.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-				var (branchRef, _) = await client.CreateBranchAndPushAsync(
-					repository, sourceBranch.Value.ObjectId, featureBranch, fileChanges, commitMessage, newFilePaths);
+			var (branchRef, _) = await client.CreateBranchAndPushAsync(
+				repository, sourceBranch.Value.ObjectId, featureBranch, fileChanges, commitMessage, newFilePaths);
 
 			ConsoleWriter.Out.Green().WriteLine($"  Created branch: {branchRef}").ResetColor();
 
@@ -269,10 +273,61 @@ namespace NuGroom.Workflows
 			}
 
 			return defaultBranch;
-		}
+			}
 
-		/// <summary>
-		/// Derives a target branch name for auto-creation when the target branch does not exist.
+			/// <summary>
+			/// Discovers existing <c>Directory.Packages.props</c> files from the source branch.
+			/// For per-repository mode only the root-level file is checked. For per-project mode
+			/// the directory of each project file is probed as well.
+			/// </summary>
+			private static async Task<Dictionary<string, string>> DiscoverExistingPropsAsync(
+				AzureDevOpsClient client,
+				Microsoft.TeamFoundation.SourceControl.WebApi.GitRepository repository,
+				string branchRefName,
+				IEnumerable<string> projectPaths,
+				bool perProject)
+			{
+				var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+				var probePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/Directory.Packages.props" };
+
+				if (perProject)
+				{
+					foreach (var projectPath in projectPaths)
+					{
+						var normalized = projectPath.Replace('\\', '/');
+						var lastSlash = normalized.LastIndexOf('/');
+
+						var propsPath = lastSlash >= 0
+							? normalized[..(lastSlash + 1)] + "Directory.Packages.props"
+							: "Directory.Packages.props";
+
+						if (!propsPath.StartsWith('/'))
+						{
+							propsPath = "/" + propsPath;
+						}
+
+						probePaths.Add(propsPath);
+					}
+				}
+
+				foreach (var path in probePaths)
+				{
+					var content = await client.GetFileContentFromBranchAsync(repository, path, branchRefName);
+
+					if (!string.IsNullOrWhiteSpace(content))
+					{
+						// Store with a normalised key that matches what CpmMigrationGenerator uses
+						var key = path.TrimStart('/');
+						result[key] = content;
+						Logger.Info($"  Found existing {key}");
+					}
+				}
+
+				return result;
+			}
+
+			/// <summary>
+			/// Derives a target branch name for auto-creation when the target branch does not exist.
 		/// Returns <c>null</c> when the name cannot be determined (e.g. wildcard pattern).
 		/// </summary>
 		private static string? DeriveTargetBranchName(UpdateConfig? updateConfig, Microsoft.TeamFoundation.SourceControl.WebApi.GitRepository repository)
