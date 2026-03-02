@@ -67,7 +67,7 @@ namespace NuGroom.Workflows
 
 				try
 				{
-					await MigrateRepositoryAsync(client, repository, repoGroup.ToList(), perProject, isDryRun, updateConfig);
+					await MigrateRepositoryAsync(client, repository, perProject, isDryRun, updateConfig);
 				}
 				catch (Exception ex)
 				{
@@ -82,7 +82,6 @@ namespace NuGroom.Workflows
 		private static async Task MigrateRepositoryAsync(
 			AzureDevOpsClient client,
 			Microsoft.TeamFoundation.SourceControl.WebApi.GitRepository repository,
-			List<PackageReferenceExtractor.PackageReference> references,
 			bool perProject,
 			bool isDryRun,
 			UpdateConfig? updateConfig)
@@ -97,21 +96,23 @@ namespace NuGroom.Workflows
 				return;
 			}
 
-			// Read current project file contents from the source branch
-			var projectPaths = references.Select(r => r.ProjectPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+			// Enumerate all project files from the source branch so that the file list
+			// matches the branch being migrated. GetProjectFilesAsync already respects
+			// repository and project exclusion/inclusion rules.
+			var projectFiles = await client.GetProjectFilesAsync(repository, sourceBranch.Value.RefName);
 			var projectContents = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-			foreach (var projectPath in projectPaths)
+			foreach (var projectFile in projectFiles)
 			{
-				var content = await client.GetFileContentFromBranchAsync(repository, projectPath, sourceBranch.Value.RefName);
+				var content = await client.GetFileContentFromBranchAsync(repository, projectFile.Path, sourceBranch.Value.RefName);
 
 				if (!string.IsNullOrWhiteSpace(content))
 				{
-					projectContents[projectPath] = content;
+					projectContents[projectFile.Path] = content;
 				}
 				else
 				{
-					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Could not read {projectPath}, skipping.").ResetColor();
+					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Could not read {projectFile.Path}, skipping.").ResetColor();
 				}
 			}
 
@@ -121,8 +122,23 @@ namespace NuGroom.Workflows
 				return;
 			}
 
+			// Extract all package references from the project contents without any
+			// package exclusion filters so that every package is included in the CPM migration.
+			var extractor = new PackageReferenceExtractor(PackageReferenceExtractor.ExclusionList.CreateEmpty());
+			var allReferences = new List<PackageReferenceExtractor.PackageReference>();
+
+			foreach (var (projectPath, content) in projectContents)
+			{
+				allReferences.AddRange(extractor.ExtractPackageReferences(content, repository.Name, projectPath));
+			}
+
+			// Discover existing Directory.Packages.props files so that the migration
+			// merges with them instead of overwriting their content.
+			var existingPropsContents = await DiscoverExistingPropsAsync(
+				client, repository, sourceBranch.Value.RefName, projectContents.Keys, perProject);
+
 			// Generate migration
-			var result = CpmMigrationGenerator.Migrate(references, projectContents, perProject);
+			var result = CpmMigrationGenerator.Migrate(allReferences, projectContents, perProject, existingPropsContents);
 
 			// Print warnings for version conflicts
 			foreach (var conflict in result.Conflicts)
@@ -154,21 +170,21 @@ namespace NuGroom.Workflows
 
 			var targetBranch = await ResolveTargetBranchAsync(client, repository, updateConfig);
 
-				if (targetBranch == null)
+			if (targetBranch == null)
+			{
+				var targetBranchName = DeriveTargetBranchName(updateConfig, repository);
+
+				if (targetBranchName == null)
 				{
-					var targetBranchName = DeriveTargetBranchName(updateConfig, repository);
+					ConsoleWriter.Out.Yellow().WriteLine("  Could not determine target branch name. Skipping.").ResetColor();
 
-					if (targetBranchName == null)
-					{
-						ConsoleWriter.Out.Yellow().WriteLine("  Could not determine target branch name. Skipping.").ResetColor();
-
-						return;
-					}
-
-					ConsoleWriter.Out.WriteLine($"  Target branch not found, creating '{targetBranchName}' from source branch...");
-					targetBranch = await client.CreateBranchAsync(repository, sourceBranch.Value.ObjectId, targetBranchName);
-					ConsoleWriter.Out.Green().WriteLine($"  Created target branch: {targetBranch.Value.RefName}").ResetColor();
+					return;
 				}
+
+				ConsoleWriter.Out.WriteLine($"  Target branch not found, creating '{targetBranchName}' from source branch...");
+				targetBranch = await client.CreateBranchAsync(repository, sourceBranch.Value.ObjectId, targetBranchName);
+				ConsoleWriter.Out.Green().WriteLine($"  Created target branch: {targetBranch.Value.RefName}").ResetColor();
+			}
 
 			var now = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
 			var featureBranch = $"feature/migrate-to-cpm-{now}";
@@ -179,8 +195,8 @@ namespace NuGroom.Workflows
 					.Select(f => f.FilePath)
 					.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-				var (branchRef, _) = await client.CreateBranchAndPushAsync(
-					repository, sourceBranch.Value.ObjectId, featureBranch, fileChanges, commitMessage, newFilePaths);
+			var (branchRef, _) = await client.CreateBranchAndPushAsync(
+				repository, sourceBranch.Value.ObjectId, featureBranch, fileChanges, commitMessage, newFilePaths);
 
 			ConsoleWriter.Out.Green().WriteLine($"  Created branch: {branchRef}").ResetColor();
 
@@ -257,6 +273,71 @@ namespace NuGroom.Workflows
 			}
 
 			return defaultBranch;
+		}
+
+		/// <summary>
+		/// Discovers existing <c>Directory.Packages.props</c> files from the source branch
+		/// by enumerating the repository item tree once, avoiding per-path probes that would
+		/// spam warnings for paths that do not exist.
+		/// </summary>
+		private static async Task<Dictionary<string, string>> DiscoverExistingPropsAsync(
+			AzureDevOpsClient client,
+			Microsoft.TeamFoundation.SourceControl.WebApi.GitRepository repository,
+			string branchRefName,
+			IEnumerable<string> projectPaths,
+			bool perProject)
+		{
+			var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+			var managementFiles = await client.GetPackageManagementFilesAsync(repository, branchRefName);
+
+			var propsFiles = managementFiles
+				.Where(f => Path.GetFileName(f.Path)
+					.Equals("Directory.Packages.props", StringComparison.OrdinalIgnoreCase))
+				.ToList();
+
+			if (propsFiles.Count == 0)
+			{
+				return result;
+			}
+
+			// Build a set of relevant directories to limit which props files we read
+			var relevantDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/" };
+
+			if (perProject)
+			{
+				foreach (var projectPath in projectPaths)
+				{
+					var normalized = projectPath.Replace('\\', '/');
+					var lastSlash = normalized.LastIndexOf('/');
+
+					if (lastSlash >= 0)
+					{
+						relevantDirs.Add(normalized[..lastSlash]);
+					}
+				}
+			}
+
+			foreach (var propsFile in propsFiles)
+			{
+				var dir = Path.GetDirectoryName(propsFile.Path)?.Replace('\\', '/') ?? "/";
+
+				if (!relevantDirs.Contains(dir))
+				{
+					continue;
+				}
+
+				var content = await client.GetFileContentFromBranchAsync(repository, propsFile.Path, branchRefName);
+
+				if (!string.IsNullOrWhiteSpace(content))
+				{
+					var key = propsFile.Path.TrimStart('/');
+					result[key] = content;
+					Logger.Info($"  Found existing {key}");
+				}
+			}
+
+			return result;
 		}
 
 		/// <summary>

@@ -28,9 +28,9 @@ namespace NuGroom.Tests
 		{
 			var versions = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 			{
-				["Serilog"]         = "3.1.1",
+				["Serilog"] = "3.1.1",
 				["Newtonsoft.Json"] = "13.0.3",
-				["xunit"]           = "2.9.0"
+				["xunit"] = "2.9.0"
 			};
 
 			var result = CpmMigrationGenerator.GenerateDirectoryPackagesProps(versions);
@@ -516,6 +516,285 @@ namespace NuGroom.Tests
 
 			var propsChange = result.FileChanges.First(f => f.FilePath == "Directory.Packages.props");
 			propsChange.Content.ShouldContain("Version=\"13.0.3\"");
+		}
+
+		// ── Mixed-repo: existing Directory.Packages.props (per-repository) ──
+
+		[Test]
+		public void WhenExistingPropsExistsThenMergedAndMarkedAsModified()
+		{
+			var references = new List<PackageReferenceExtractor.PackageReference>
+					{
+						new(
+							PackageName: "Serilog",
+							Version: "3.1.1",
+							ProjectPath: "src/NewApp/NewApp.csproj",
+							RepositoryName: "MixedRepo",
+							ProjectName: "NewApp",
+							LineNumber: 5)
+					};
+
+			var projectContents = new Dictionary<string, string>
+			{
+				["src/NewApp/NewApp.csproj"] = "<Project><ItemGroup><PackageReference Include=\"Serilog\" Version=\"3.1.1\" /></ItemGroup></Project>"
+			};
+
+			var existingProps = new Dictionary<string, string>
+			{
+				["Directory.Packages.props"] = """
+							<Project>
+							  <PropertyGroup>
+								<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+							  </PropertyGroup>
+							  <ItemGroup>
+								<PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+							  </ItemGroup>
+							</Project>
+							"""
+			};
+
+			var result = CpmMigrationGenerator.Migrate(references, projectContents, perProject: false, existingProps);
+
+			var propsChange = result.FileChanges.First(f => f.FilePath == "Directory.Packages.props");
+
+			propsChange.IsNew.ShouldBeFalse();
+			propsChange.Content.ShouldContain("<PackageVersion Include=\"Newtonsoft.Json\" Version=\"13.0.3\" />");
+			propsChange.Content.ShouldContain("<PackageVersion Include=\"Serilog\" Version=\"3.1.1\" />");
+		}
+
+		[Test]
+		public void WhenExistingPropsHasSamePackageThenNewVersionWins()
+		{
+			var references = new List<PackageReferenceExtractor.PackageReference>
+					{
+						new(
+							PackageName: "Newtonsoft.Json",
+							Version: "14.0.0",
+							ProjectPath: "src/App/App.csproj",
+							RepositoryName: "MixedRepo",
+							ProjectName: "App",
+							LineNumber: 5)
+					};
+
+			var projectContents = new Dictionary<string, string>
+			{
+				["src/App/App.csproj"] = "<Project><ItemGroup><PackageReference Include=\"Newtonsoft.Json\" Version=\"14.0.0\" /></ItemGroup></Project>"
+			};
+
+			var existingProps = new Dictionary<string, string>
+			{
+				["Directory.Packages.props"] = """
+							<Project>
+							  <PropertyGroup>
+								<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+							  </PropertyGroup>
+							  <ItemGroup>
+								<PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+							  </ItemGroup>
+							</Project>
+							"""
+			};
+
+			var result = CpmMigrationGenerator.Migrate(references, projectContents, perProject: false, existingProps);
+
+			var propsChange = result.FileChanges.First(f => f.FilePath == "Directory.Packages.props");
+
+			propsChange.IsNew.ShouldBeFalse();
+			propsChange.Content.ShouldContain("Version=\"14.0.0\"");
+			propsChange.Content.ShouldNotContain("Version=\"13.0.3\"");
+		}
+
+		[Test]
+		public void WhenNoExistingPropsThenMarkedAsNew()
+		{
+			var references = new List<PackageReferenceExtractor.PackageReference>
+					{
+						new(
+							PackageName: "Serilog",
+							Version: "3.1.1",
+							ProjectPath: "src/App/App.csproj",
+							RepositoryName: "Repo",
+							ProjectName: "App",
+							LineNumber: 5)
+					};
+
+			var projectContents = new Dictionary<string, string>
+			{
+				["src/App/App.csproj"] = "<Project><ItemGroup><PackageReference Include=\"Serilog\" Version=\"3.1.1\" /></ItemGroup></Project>"
+			};
+
+			var emptyExistingProps = new Dictionary<string, string>();
+
+			var result = CpmMigrationGenerator.Migrate(references, projectContents, perProject: false, emptyExistingProps);
+
+			var propsChange = result.FileChanges.First(f => f.FilePath == "Directory.Packages.props");
+			propsChange.IsNew.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenMixedRepoWithConflictThenExistingPackagesPreservedAndConflictReported()
+		{
+			var references = new List<PackageReferenceExtractor.PackageReference>
+					{
+						new(
+							PackageName: "Serilog",
+							Version: "3.2.0",
+							ProjectPath: "src/App1/App1.csproj",
+							RepositoryName: "MixedRepo",
+							ProjectName: "App1",
+							LineNumber: 5),
+						new(
+							PackageName: "Serilog",
+							Version: "3.0.0",
+							ProjectPath: "src/App2/App2.csproj",
+							RepositoryName: "MixedRepo",
+							ProjectName: "App2",
+							LineNumber: 5)
+					};
+
+			var projectContents = new Dictionary<string, string>
+			{
+				["src/App1/App1.csproj"] = "<Project><ItemGroup><PackageReference Include=\"Serilog\" Version=\"3.2.0\" /></ItemGroup></Project>",
+				["src/App2/App2.csproj"] = "<Project><ItemGroup><PackageReference Include=\"Serilog\" Version=\"3.0.0\" /></ItemGroup></Project>"
+			};
+
+			var existingProps = new Dictionary<string, string>
+			{
+				["Directory.Packages.props"] = """
+							<Project>
+							  <PropertyGroup>
+								<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+							  </PropertyGroup>
+							  <ItemGroup>
+								<PackageVersion Include="xunit" Version="2.9.0" />
+							  </ItemGroup>
+							</Project>
+							"""
+			};
+
+			var result = CpmMigrationGenerator.Migrate(references, projectContents, perProject: false, existingProps);
+
+			var propsChange = result.FileChanges.First(f => f.FilePath == "Directory.Packages.props");
+
+			propsChange.IsNew.ShouldBeFalse();
+			propsChange.Content.ShouldContain("<PackageVersion Include=\"xunit\" Version=\"2.9.0\" />");
+			propsChange.Content.ShouldContain("Version=\"3.2.0\"");
+
+			result.Conflicts.Count.ShouldBe(1);
+			result.Conflicts[0].ProjectPath.ShouldBe("src/App2/App2.csproj");
+		}
+
+		// ── Mixed-repo: existing Directory.Packages.props (per-project) ─────
+
+		[Test]
+		public void WhenPerProjectExistingPropsThenMergedAndMarkedAsModified()
+		{
+			var references = new List<PackageReferenceExtractor.PackageReference>
+					{
+						new(
+							PackageName: "Serilog",
+							Version: "3.1.1",
+							ProjectPath: "src/App1/App1.csproj",
+							RepositoryName: "MixedRepo",
+							ProjectName: "App1",
+							LineNumber: 5)
+					};
+
+			var projectContents = new Dictionary<string, string>
+			{
+				["src/App1/App1.csproj"] = "<Project><ItemGroup><PackageReference Include=\"Serilog\" Version=\"3.1.1\" /></ItemGroup></Project>"
+			};
+
+			var existingProps = new Dictionary<string, string>
+			{
+				["src/App1/Directory.Packages.props"] = """
+							<Project>
+							  <PropertyGroup>
+								<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+							  </PropertyGroup>
+							  <ItemGroup>
+								<PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+							  </ItemGroup>
+							</Project>
+							"""
+			};
+
+			var result = CpmMigrationGenerator.Migrate(references, projectContents, perProject: true, existingProps);
+
+			var propsChange = result.FileChanges.First(f => f.FilePath == "src/App1/Directory.Packages.props");
+
+			propsChange.IsNew.ShouldBeFalse();
+			propsChange.Content.ShouldContain("<PackageVersion Include=\"Newtonsoft.Json\" Version=\"13.0.3\" />");
+			propsChange.Content.ShouldContain("<PackageVersion Include=\"Serilog\" Version=\"3.1.1\" />");
+		}
+
+		[Test]
+		public void WhenPerProjectNoExistingPropsThenMarkedAsNew()
+		{
+			var references = new List<PackageReferenceExtractor.PackageReference>
+					{
+						new(
+							PackageName: "Serilog",
+							Version: "3.1.1",
+							ProjectPath: "src/App1/App1.csproj",
+							RepositoryName: "MixedRepo",
+							ProjectName: "App1",
+							LineNumber: 5)
+					};
+
+			var projectContents = new Dictionary<string, string>
+			{
+				["src/App1/App1.csproj"] = "<Project><ItemGroup><PackageReference Include=\"Serilog\" Version=\"3.1.1\" /></ItemGroup></Project>"
+			};
+
+			var emptyExistingProps = new Dictionary<string, string>();
+
+			var result = CpmMigrationGenerator.Migrate(references, projectContents, perProject: true, emptyExistingProps);
+
+			var propsChange = result.FileChanges.First(f => f.FilePath == "src/App1/Directory.Packages.props");
+			propsChange.IsNew.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenPerProjectPathHasLeadingSlashThenExistingPropsMerged()
+		{
+			var references = new List<PackageReferenceExtractor.PackageReference>
+									{
+										new(
+											PackageName: "Serilog",
+											Version: "3.1.1",
+											ProjectPath: "/src/App1/App1.csproj",
+											RepositoryName: "MixedRepo",
+											ProjectName: "App1",
+											LineNumber: 5)
+									};
+
+			var projectContents = new Dictionary<string, string>
+			{
+				["/src/App1/App1.csproj"] = "<Project><ItemGroup><PackageReference Include=\"Serilog\" Version=\"3.1.1\" /></ItemGroup></Project>"
+			};
+
+			var existingProps = new Dictionary<string, string>
+			{
+				["src/App1/Directory.Packages.props"] = """
+											<Project>
+											  <PropertyGroup>
+												<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+											  </PropertyGroup>
+											  <ItemGroup>
+												<PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+											  </ItemGroup>
+											</Project>
+											"""
+			};
+
+			var result = CpmMigrationGenerator.Migrate(references, projectContents, perProject: true, existingProps);
+
+			var propsChange = result.FileChanges.First(f => f.FilePath == "src/App1/Directory.Packages.props");
+
+			propsChange.IsNew.ShouldBeFalse();
+			propsChange.Content.ShouldContain("<PackageVersion Include=\"Newtonsoft.Json\" Version=\"13.0.3\" />");
+			propsChange.Content.ShouldContain("<PackageVersion Include=\"Serilog\" Version=\"3.1.1\" />");
 		}
 	}
 }

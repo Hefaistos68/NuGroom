@@ -56,11 +56,20 @@ namespace NuGroom.Nuget
 		/// When <c>true</c>, creates a <c>Directory.Packages.props</c> alongside each project
 		/// instead of a single file at the repository root.
 		/// </param>
+		/// <param name="existingPropsContents">
+		/// Optional dictionary mapping repository-relative paths of existing
+		/// <c>Directory.Packages.props</c> files to their XML content.
+		/// When provided, existing <c>PackageVersion</c> entries are extracted and
+		/// included in the generated output so they are not lost. The output file is
+		/// still regenerated from scratch; other XML content such as comments,
+		/// conditions, or custom items in the original file is not preserved.
+		/// </param>
 		/// <returns>A <see cref="CpmMigrationResult"/> containing file changes and conflict warnings.</returns>
 		public static CpmMigrationResult Migrate(
 			List<PackageReferenceExtractor.PackageReference> references,
 			Dictionary<string, string> projectContents,
-			bool perProject)
+			bool perProject,
+			Dictionary<string, string>? existingPropsContents = null)
 		{
 			ArgumentNullException.ThrowIfNull(references);
 			ArgumentNullException.ThrowIfNull(projectContents);
@@ -75,12 +84,14 @@ namespace NuGroom.Nuget
 				return new CpmMigrationResult(new List<CpmFileChange>(), new List<CpmVersionConflict>());
 			}
 
+			var propsLookup = existingPropsContents ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
 			if (perProject)
 			{
-				return MigratePerProject(eligibleRefs, projectContents);
+				return MigratePerProject(eligibleRefs, projectContents, propsLookup);
 			}
 
-			return MigratePerRepository(eligibleRefs, projectContents);
+			return MigratePerRepository(eligibleRefs, projectContents, propsLookup);
 		}
 
 		/// <summary>
@@ -157,7 +168,8 @@ namespace NuGroom.Nuget
 		/// </summary>
 		private static CpmMigrationResult MigratePerRepository(
 			List<PackageReferenceExtractor.PackageReference> references,
-			Dictionary<string, string> projectContents)
+			Dictionary<string, string> projectContents,
+			Dictionary<string, string> existingPropsContents)
 		{
 			var fileChanges = new List<CpmFileChange>();
 			var conflicts = new List<CpmVersionConflict>();
@@ -167,6 +179,21 @@ namespace NuGroom.Nuget
 				.GroupBy(r => r.PackageName, StringComparer.OrdinalIgnoreCase);
 
 			var centralVersions = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+			// Seed central versions from an existing root-level Directory.Packages.props
+			var propsFilePath = "Directory.Packages.props";
+			var propsAlreadyExists = false;
+
+			if (existingPropsContents.TryGetValue(propsFilePath, out var existingContent))
+			{
+				var parsed = CpmPackageExtractor.Parse(existingContent);
+				propsAlreadyExists = true;
+
+				foreach (var kvp in parsed.PackageVersions)
+				{
+					centralVersions[kvp.Key] = kvp.Value;
+				}
+			}
 
 			// Per-project overrides: projectPath -> (packageName -> overrideVersion)
 			var projectOverrides = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
@@ -207,7 +234,7 @@ namespace NuGroom.Nuget
 
 			// Generate Directory.Packages.props at repository root
 			var propsContent = GenerateDirectoryPackagesProps(centralVersions);
-			fileChanges.Add(new CpmFileChange("Directory.Packages.props", propsContent, IsNew: true));
+			fileChanges.Add(new CpmFileChange(propsFilePath, propsContent, IsNew: !propsAlreadyExists));
 
 			// Modify each project file
 			var projectPaths = references.Select(r => r.ProjectPath).Distinct(StringComparer.OrdinalIgnoreCase);
@@ -235,7 +262,8 @@ namespace NuGroom.Nuget
 		/// </summary>
 		private static CpmMigrationResult MigratePerProject(
 			List<PackageReferenceExtractor.PackageReference> references,
-			Dictionary<string, string> projectContents)
+			Dictionary<string, string> projectContents,
+			Dictionary<string, string> existingPropsContents)
 		{
 			var fileChanges = new List<CpmFileChange>();
 			var conflicts = new List<CpmVersionConflict>();
@@ -249,15 +277,29 @@ namespace NuGroom.Nuget
 				var projectPath = projectGroup.Key;
 				var centralVersions = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+				// Seed from existing Directory.Packages.props alongside this project
+				var propsPath = GetPerProjectPropsPath(projectPath);
+				var propsAlreadyExists = false;
+
+				if (existingPropsContents.TryGetValue(propsPath, out var existingContent))
+				{
+					var parsed = CpmPackageExtractor.Parse(existingContent);
+					propsAlreadyExists = true;
+
+					foreach (var kvp in parsed.PackageVersions)
+					{
+						centralVersions[kvp.Key] = kvp.Value;
+					}
+				}
+
 				foreach (var reference in projectGroup)
 				{
 					centralVersions[reference.PackageName] = reference.Version!;
 				}
 
 				// Generate Directory.Packages.props alongside the project file
-				var propsPath = GetPerProjectPropsPath(projectPath);
 				var propsContent = GenerateDirectoryPackagesProps(centralVersions);
-				fileChanges.Add(new CpmFileChange(propsPath, propsContent, IsNew: true));
+				fileChanges.Add(new CpmFileChange(propsPath, propsContent, IsNew: !propsAlreadyExists));
 
 				// Modify the project file — no overrides needed for per-project (each project has its own versions)
 				if (projectContents.TryGetValue(projectPath, out var content))
@@ -277,7 +319,7 @@ namespace NuGroom.Nuget
 		/// <returns>Path to the <c>Directory.Packages.props</c> in the same directory.</returns>
 		private static string GetPerProjectPropsPath(string projectPath)
 		{
-			var directory = projectPath.Replace('\\', '/');
+			var directory = projectPath.Replace('\\', '/').TrimStart('/');
 			var lastSlash = directory.LastIndexOf('/');
 
 			if (lastSlash >= 0)
