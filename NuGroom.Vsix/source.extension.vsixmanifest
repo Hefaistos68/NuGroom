@@ -15,6 +15,6 @@
         <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" Version="4.8" />
     </Dependencies>
     <Assets>
-        <Asset Type="Microsoft.VisualStudio.Content" Path="NuGroom.*.nupkg" />
+        <Asset Type="Microsoft.VisualStudio.Content" Path="toolpack\NuGroom.*.nupkg" />
     </Assets>
 </PackageManifest>

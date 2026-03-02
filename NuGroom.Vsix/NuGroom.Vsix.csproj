@@ -37,7 +37,10 @@
     </Content>
   </ItemGroup>
 
-  <Target Name="PackNuGroomTool" BeforeTargets="PrepareForBuild">
+  <Target Name="PackNuGroomTool"
+          BeforeTargets="PrepareForBuild"
+          Inputs="..\NuGroom\NuGroom.csproj"
+          Outputs="$(IntermediateOutputPath)toolpack\NuGroom.*.nupkg">
     <MakeDir Directories="$(IntermediateOutputPath)toolpack" />
     <Exec Command="dotnet pack ..\NuGroom\NuGroom.csproj -c $(Configuration) -o $(IntermediateOutputPath)toolpack" />
   </Target>
