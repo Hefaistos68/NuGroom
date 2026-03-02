@@ -67,7 +67,7 @@ namespace NuGroom.Workflows
 
 				try
 				{
-					await MigrateRepositoryAsync(client, repository, repoGroup.ToList(), perProject, isDryRun, updateConfig);
+					await MigrateRepositoryAsync(client, repository, perProject, isDryRun, updateConfig);
 				}
 				catch (Exception ex)
 				{
@@ -82,7 +82,6 @@ namespace NuGroom.Workflows
 		private static async Task MigrateRepositoryAsync(
 			AzureDevOpsClient client,
 			Microsoft.TeamFoundation.SourceControl.WebApi.GitRepository repository,
-			List<PackageReferenceExtractor.PackageReference> references,
 			bool perProject,
 			bool isDryRun,
 			UpdateConfig? updateConfig)
@@ -97,42 +96,45 @@ namespace NuGroom.Workflows
 				return;
 			}
 
-			// Read current project file contents from the source branch
-			var projectPaths = references.Select(r => r.ProjectPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+			// Enumerate all project files directly from the repository so that projects
+			// whose packages were excluded during scanning are still included in the
+			// migration. GetProjectFilesAsync already respects repository and project
+			// exclusion/inclusion rules.
+			var projectFiles = await client.GetProjectFilesAsync(repository);
 			var projectContents = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-			foreach (var projectPath in projectPaths)
+			foreach (var projectFile in projectFiles)
 			{
-				var content = await client.GetFileContentFromBranchAsync(repository, projectPath, sourceBranch.Value.RefName);
+				var content = await client.GetFileContentFromBranchAsync(repository, projectFile.Path, sourceBranch.Value.RefName);
 
 				if (!string.IsNullOrWhiteSpace(content))
 				{
-					projectContents[projectPath] = content;
+					projectContents[projectFile.Path] = content;
 				}
 				else
 				{
-					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Could not read {projectPath}, skipping.").ResetColor();
+					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Could not read {projectFile.Path}, skipping.").ResetColor();
 				}
 			}
 
 			if (projectContents.Count == 0)
-				{
-					ConsoleWriter.Out.Yellow().WriteLine("  No project files could be read. Skipping.").ResetColor();
-					return;
-				}
+			{
+				ConsoleWriter.Out.Yellow().WriteLine("  No project files could be read. Skipping.").ResetColor();
+				return;
+			}
 
-				// Re-extract all package references from the actual project contents without any
-				// exclusion filters so that every package is included in the CPM migration.
-				var extractor = new PackageReferenceExtractor(PackageReferenceExtractor.ExclusionList.CreateEmpty());
-				var allReferences = new List<PackageReferenceExtractor.PackageReference>();
+			// Extract all package references from the project contents without any
+			// package exclusion filters so that every package is included in the CPM migration.
+			var extractor = new PackageReferenceExtractor(PackageReferenceExtractor.ExclusionList.CreateEmpty());
+			var allReferences = new List<PackageReferenceExtractor.PackageReference>();
 
-				foreach (var (projectPath, content) in projectContents)
-				{
-					allReferences.AddRange(extractor.ExtractPackageReferences(content, repository.Name, projectPath));
-				}
+			foreach (var (projectPath, content) in projectContents)
+			{
+				allReferences.AddRange(extractor.ExtractPackageReferences(content, repository.Name, projectPath));
+			}
 
-				// Generate migration
-				var result = CpmMigrationGenerator.Migrate(allReferences, projectContents, perProject);
+			// Generate migration
+			var result = CpmMigrationGenerator.Migrate(allReferences, projectContents, perProject);
 
 			// Print warnings for version conflicts
 			foreach (var conflict in result.Conflicts)
