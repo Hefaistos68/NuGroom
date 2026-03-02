@@ -405,14 +405,49 @@ namespace NuGroom.ADO
 			GitRepository repository,
 			bool includePackagesConfig = false)
 		{
+			return await GetPackageManagementFilesAsync(repository, branchName: null, includePackagesConfig);
+		}
+
+		/// <summary>
+		/// Gets package management files (<c>Directory.Packages.props</c> and <c>packages.config</c>)
+		/// from a specific branch of a repository.
+		/// When <paramref name="branchName"/> is <c>null</c>, the repository default branch is used.
+		/// </summary>
+		/// <param name="repository">The repository to scan.</param>
+		/// <param name="branchName">
+		/// Full ref name (e.g. <c>refs/heads/main</c>) or short name of the branch to enumerate.
+		/// Pass <c>null</c> to use the repository default.
+		/// </param>
+		/// <param name="includePackagesConfig">
+		/// When <c>false</c>, <c>packages.config</c> files are excluded from the result.
+		/// </param>
+		/// <returns>List of matching <see cref="GitItem"/> entries.</returns>
+		public async Task<List<GitItem>> GetPackageManagementFilesAsync(
+			GitRepository repository,
+			string? branchName,
+			bool includePackagesConfig = false)
+		{
 			try
 			{
-				Logger.Debug($"Getting package management files from repository: {repository.Name}");
+				Logger.Debug($"Getting package management files from repository: {repository.Name}" +
+					(branchName != null ? $" (branch: {branchName})" : ""));
+
+				GitVersionDescriptor? versionDescriptor = null;
+
+				if (!string.IsNullOrEmpty(branchName))
+				{
+					versionDescriptor = new GitVersionDescriptor
+					{
+						VersionType = GitVersionType.Branch,
+						Version = branchName.Replace("refs/heads/", "")
+					};
+				}
 
 				var items = await _gitClient.GetItemsAsync(
 					repository.Id,
 					scopePath: "/",
-					recursionLevel: VersionControlRecursionType.Full);
+					recursionLevel: VersionControlRecursionType.Full,
+					versionDescriptor: versionDescriptor);
 
 				var managementFiles = items
 					.Where(item => !item.IsFolder && IsPackageManagementFile(item.Path, includePackagesConfig))

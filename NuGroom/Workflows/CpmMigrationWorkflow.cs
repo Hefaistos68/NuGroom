@@ -123,22 +123,22 @@ namespace NuGroom.Workflows
 			}
 
 			// Extract all package references from the project contents without any
-				// package exclusion filters so that every package is included in the CPM migration.
-				var extractor = new PackageReferenceExtractor(PackageReferenceExtractor.ExclusionList.CreateEmpty());
-				var allReferences = new List<PackageReferenceExtractor.PackageReference>();
+			// package exclusion filters so that every package is included in the CPM migration.
+			var extractor = new PackageReferenceExtractor(PackageReferenceExtractor.ExclusionList.CreateEmpty());
+			var allReferences = new List<PackageReferenceExtractor.PackageReference>();
 
-				foreach (var (projectPath, content) in projectContents)
-				{
-					allReferences.AddRange(extractor.ExtractPackageReferences(content, repository.Name, projectPath));
-				}
+			foreach (var (projectPath, content) in projectContents)
+			{
+				allReferences.AddRange(extractor.ExtractPackageReferences(content, repository.Name, projectPath));
+			}
 
-				// Discover existing Directory.Packages.props files so that the migration
-				// merges with them instead of overwriting their content.
-				var existingPropsContents = await DiscoverExistingPropsAsync(
-					client, repository, sourceBranch.Value.RefName, projectContents.Keys, perProject);
+			// Discover existing Directory.Packages.props files so that the migration
+			// merges with them instead of overwriting their content.
+			var existingPropsContents = await DiscoverExistingPropsAsync(
+				client, repository, sourceBranch.Value.RefName, projectContents.Keys, perProject);
 
-				// Generate migration
-				var result = CpmMigrationGenerator.Migrate(allReferences, projectContents, perProject, existingPropsContents);
+			// Generate migration
+			var result = CpmMigrationGenerator.Migrate(allReferences, projectContents, perProject, existingPropsContents);
 
 			// Print warnings for version conflicts
 			foreach (var conflict in result.Conflicts)
@@ -273,61 +273,75 @@ namespace NuGroom.Workflows
 			}
 
 			return defaultBranch;
-			}
+		}
 
-			/// <summary>
-			/// Discovers existing <c>Directory.Packages.props</c> files from the source branch.
-			/// For per-repository mode only the root-level file is checked. For per-project mode
-			/// the directory of each project file is probed as well.
-			/// </summary>
-			private static async Task<Dictionary<string, string>> DiscoverExistingPropsAsync(
-				AzureDevOpsClient client,
-				Microsoft.TeamFoundation.SourceControl.WebApi.GitRepository repository,
-				string branchRefName,
-				IEnumerable<string> projectPaths,
-				bool perProject)
+		/// <summary>
+		/// Discovers existing <c>Directory.Packages.props</c> files from the source branch
+		/// by enumerating the repository item tree once, avoiding per-path probes that would
+		/// spam warnings for paths that do not exist.
+		/// </summary>
+		private static async Task<Dictionary<string, string>> DiscoverExistingPropsAsync(
+			AzureDevOpsClient client,
+			Microsoft.TeamFoundation.SourceControl.WebApi.GitRepository repository,
+			string branchRefName,
+			IEnumerable<string> projectPaths,
+			bool perProject)
+		{
+			var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+			var managementFiles = await client.GetPackageManagementFilesAsync(repository, branchRefName);
+
+			var propsFiles = managementFiles
+				.Where(f => Path.GetFileName(f.Path)
+					.Equals("Directory.Packages.props", StringComparison.OrdinalIgnoreCase))
+				.ToList();
+
+			if (propsFiles.Count == 0)
 			{
-				var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-				var probePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/Directory.Packages.props" };
-
-				if (perProject)
-				{
-					foreach (var projectPath in projectPaths)
-					{
-						var normalized = projectPath.Replace('\\', '/');
-						var lastSlash = normalized.LastIndexOf('/');
-
-						var propsPath = lastSlash >= 0
-							? normalized[..(lastSlash + 1)] + "Directory.Packages.props"
-							: "Directory.Packages.props";
-
-						if (!propsPath.StartsWith('/'))
-						{
-							propsPath = "/" + propsPath;
-						}
-
-						probePaths.Add(propsPath);
-					}
-				}
-
-				foreach (var path in probePaths)
-				{
-					var content = await client.GetFileContentFromBranchAsync(repository, path, branchRefName);
-
-					if (!string.IsNullOrWhiteSpace(content))
-					{
-						// Store with a normalised key that matches what CpmMigrationGenerator uses
-						var key = path.TrimStart('/');
-						result[key] = content;
-						Logger.Info($"  Found existing {key}");
-					}
-				}
-
 				return result;
 			}
 
-			/// <summary>
-			/// Derives a target branch name for auto-creation when the target branch does not exist.
+			// Build a set of relevant directories to limit which props files we read
+			var relevantDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/" };
+
+			if (perProject)
+			{
+				foreach (var projectPath in projectPaths)
+				{
+					var normalized = projectPath.Replace('\\', '/');
+					var lastSlash = normalized.LastIndexOf('/');
+
+					if (lastSlash >= 0)
+					{
+						relevantDirs.Add(normalized[..lastSlash]);
+					}
+				}
+			}
+
+			foreach (var propsFile in propsFiles)
+			{
+				var dir = Path.GetDirectoryName(propsFile.Path)?.Replace('\\', '/') ?? "/";
+
+				if (!relevantDirs.Contains(dir))
+				{
+					continue;
+				}
+
+				var content = await client.GetFileContentFromBranchAsync(repository, propsFile.Path, branchRefName);
+
+				if (!string.IsNullOrWhiteSpace(content))
+				{
+					var key = propsFile.Path.TrimStart('/');
+					result[key] = content;
+					Logger.Info($"  Found existing {key}");
+				}
+			}
+
+			return result;
+		}
+
+		/// <summary>
+		/// Derives a target branch name for auto-creation when the target branch does not exist.
 		/// Returns <c>null</c> when the name cannot be determined (e.g. wildcard pattern).
 		/// </summary>
 		private static string? DeriveTargetBranchName(UpdateConfig? updateConfig, Microsoft.TeamFoundation.SourceControl.WebApi.GitRepository repository)

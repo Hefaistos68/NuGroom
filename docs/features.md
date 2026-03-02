@@ -105,6 +105,8 @@ In per-project mode:
 - No version conflicts occur because each project manages its own versions independently
 - This is useful for repositories where projects have intentionally different package versions
 
+> **Important:** When migrating a repository that already contains a `Directory.Packages.props` file (mixed repo), the migration merges existing `PackageVersion` entries into the generated output so they are not lost. However, the output file is regenerated from scratch — any other XML content in the original file such as comments, conditions, extra `PropertyGroup` elements, or custom items is **not preserved**.
+
 #### Target Branch Auto-Creation
 
 When the CPM migration creates pull requests and the configured target branch does not exist, the tool automatically creates it from the source branch instead of skipping the repository.
