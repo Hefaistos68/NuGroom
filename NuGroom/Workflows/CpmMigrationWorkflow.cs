@@ -116,13 +116,23 @@ namespace NuGroom.Workflows
 			}
 
 			if (projectContents.Count == 0)
-			{
-				ConsoleWriter.Out.Yellow().WriteLine("  No project files could be read. Skipping.").ResetColor();
-				return;
-			}
+				{
+					ConsoleWriter.Out.Yellow().WriteLine("  No project files could be read. Skipping.").ResetColor();
+					return;
+				}
 
-			// Generate migration
-			var result = CpmMigrationGenerator.Migrate(references, projectContents, perProject);
+				// Re-extract all package references from the actual project contents without any
+				// exclusion filters so that every package is included in the CPM migration.
+				var extractor = new PackageReferenceExtractor(PackageReferenceExtractor.ExclusionList.CreateEmpty());
+				var allReferences = new List<PackageReferenceExtractor.PackageReference>();
+
+				foreach (var (projectPath, content) in projectContents)
+				{
+					allReferences.AddRange(extractor.ExtractPackageReferences(content, repository.Name, projectPath));
+				}
+
+				// Generate migration
+				var result = CpmMigrationGenerator.Migrate(allReferences, projectContents, perProject);
 
 			// Print warnings for version conflicts
 			foreach (var conflict in result.Conflicts)
