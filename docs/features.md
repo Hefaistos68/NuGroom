@@ -16,6 +16,50 @@ The tool automatically detects and supports [Central Package Management](https:/
 4. Project files with `<PackageReference>` entries that omit a `Version` attribute have their versions populated from the CPM lookup
 5. If a project file specifies `VersionOverride`, that version takes precedence over the central version
 
+### MSBuild Variable Resolution
+
+`Directory.Packages.props` files commonly use MSBuild property variables (`$(PropertyName)`) to define package versions in a single place. NuGroom automatically resolves these variables during scanning so that the actual version number is used for analysis, warnings, and updates.
+
+**Supported patterns:**
+
+| Pattern | Example | Resolved |
+|---------|---------|----------|
+| Simple variable | `$(NetCoreVersion)` → `10.0.0` | `10.0.0` |
+| Composed variables | `$(MajorVersion).$(MinorVersion).$(PatchVersion)` | `13.0.3` |
+| Indirect reference | `$(FullVersion)` where `FullVersion` = `$(Major).$(Minor).$(Patch)` | `13.0.3` |
+| Partial literal | `$(MajorVersion).0.3` | `13.0.3` |
+
+**Behavior details:**
+
+- Properties are extracted from all `<PropertyGroup>` elements in the `Directory.Packages.props` file
+- Property name matching is **case-insensitive** (consistent with MSBuild)
+- Nested references are resolved iteratively (up to 10 levels to guard against circular definitions)
+- Undefined variables are left as-is (e.g., `$(UndefinedVersion)` is kept literally)
+- Properties defined in external files (e.g., `Directory.Build.props`) are not resolved — only properties within the same `Directory.Packages.props` are available
+
+**Example:**
+
+```xml
+<Project>
+  <PropertyGroup>
+    <NetCoreVersion>10.0.0</NetCoreVersion>
+    <JsonVersion>13.0.3</JsonVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(NetCoreVersion)" />
+    <PackageVersion Include="Newtonsoft.Json" Version="$(JsonVersion)" />
+    <PackageVersion Include="Serilog" Version="3.1.1" />
+  </ItemGroup>
+</Project>
+```
+
+NuGroom resolves this as:
+- `Microsoft.Extensions.Hosting` → `10.0.0`
+- `Newtonsoft.Json` → `13.0.3`
+- `Serilog` → `3.1.1` (literal, no resolution needed)
+
+No configuration is needed — variable resolution happens automatically whenever a `Directory.Packages.props` file is parsed.
+
 ### Auto-Update Behavior
 
 When CPM is active, package version updates target `Directory.Packages.props` instead of individual project files. This means a single update to the central props file can update the version for all projects in the repository.
