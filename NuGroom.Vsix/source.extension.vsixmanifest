@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
+    <Metadata>
+        <Identity Id="NuGroom.Vsix" Version="0.1.0" Language="en-US" Publisher="Hefaistos68" />
+        <DisplayName>NuGroom Tool</DisplayName>
+        <Description xml:space="preserve">A VSIX that bundles the NuGroom dotnet tool package.</Description>
+        <MoreInfo>https://github.com/Hefaistos68/NuGroom</MoreInfo>
+        <Icon>Resources\Hefaistos Logo 128.jpg</Icon>
+        <Preview>true</Preview>
+    </Metadata>
+    <Installation InstalledByMsi="false" AllUsers="true">
+        <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,18.0)" />
+    </Installation>
+    <Dependencies>
+        <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" Version="4.8" />
+    </Dependencies>
+    <Assets>
+        <Asset Type="Microsoft.VisualStudio.Content" Path="NuGroom.*.nupkg" />
+    </Assets>
+</PackageManifest>

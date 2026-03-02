@@ -23,5 +23,6 @@
     <File Path="README.md" />
   </Folder>
   <Project Path="NuGroom.Tests/NuGroom.Tests.csproj" />
+  <Project Path="NuGroom.Vsix/NuGroom.Vsix.csproj" />
   <Project Path="NuGroom/NuGroom.csproj" />
 </Solution>
