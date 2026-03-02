@@ -149,10 +149,96 @@ namespace NuGroom.Nuget
 		}
 
 		/// <summary>
+		/// Extracts all MSBuild properties from <c>&lt;PropertyGroup&gt;</c> elements.
+		/// These properties can be referenced via <c>$(PropertyName)</c> syntax in package versions.
+		/// </summary>
+		private static Dictionary<string, string> ExtractProperties(XmlDocument doc)
+		{
+			var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+			var propertyGroups = doc.SelectNodes("//*[local-name()='PropertyGroup']");
+
+			if (propertyGroups == null)
+			{
+				return properties;
+			}
+
+			foreach (XmlNode propertyGroup in propertyGroups)
+			{
+				if (propertyGroup.ChildNodes == null)
+				{
+					continue;
+				}
+
+				foreach (XmlNode child in propertyGroup.ChildNodes)
+				{
+					if (child.NodeType == XmlNodeType.Element && !string.IsNullOrWhiteSpace(child.InnerText))
+					{
+						properties[child.LocalName] = child.InnerText.Trim();
+					}
+				}
+			}
+
+			return properties;
+		}
+
+		/// <summary>
+		/// Resolves MSBuild property variables in the format <c>$(PropertyName)</c>.
+		/// Supports nested property references and handles undefined variables by returning the original text.
+		/// </summary>
+		/// <param name="value">The value that may contain property variable references.</param>
+		/// <param name="properties">Dictionary of available MSBuild properties.</param>
+		/// <returns>The value with all property references resolved.</returns>
+		private static string ResolveVariables(string value, Dictionary<string, string> properties)
+		{
+			if (string.IsNullOrWhiteSpace(value) || !value.Contains('$'))
+			{
+				return value;
+			}
+
+			var result = value;
+			var maxIterations = 10; // Prevent infinite loops in circular references
+			var iteration = 0;
+
+			while (result.Contains("$(") && iteration < maxIterations)
+			{
+				var startIndex = result.IndexOf("$(", StringComparison.Ordinal);
+
+				if (startIndex == -1)
+				{
+					break;
+				}
+
+				var endIndex = result.IndexOf(')', startIndex);
+
+				if (endIndex == -1)
+				{
+					break;
+				}
+
+				var propertyName = result.Substring(startIndex + 2, endIndex - startIndex - 2);
+
+				if (properties.TryGetValue(propertyName, out var propertyValue))
+				{
+					result = result.Substring(0, startIndex) + propertyValue + result.Substring(endIndex + 1);
+				}
+				else
+				{
+					// Property not found - leave as-is and move past it
+					break;
+				}
+
+				iteration++;
+			}
+
+			return result;
+		}
+
+		/// <summary>
 		/// Extracts all <c>&lt;PackageVersion Include="..." Version="..."/&gt;</c> entries.
 		/// </summary>
 		private static Dictionary<string, string> ExtractPackageVersions(XmlDocument doc)
 		{
+			var properties = ExtractProperties(doc);
 			var versions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 			var nodes = doc.SelectNodes("//*[local-name()='PackageVersion' and @Include]");
 
@@ -168,7 +254,8 @@ namespace NuGroom.Nuget
 
 				if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(version))
 				{
-					versions[name] = version;
+					var resolvedVersion = ResolveVariables(version, properties);
+					versions[name] = resolvedVersion;
 				}
 			}
 
