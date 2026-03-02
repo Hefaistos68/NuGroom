@@ -214,6 +214,55 @@ namespace NuGroom.Nuget
 		}
 
 		/// <summary>
+		/// Represents version information for a package reference.
+		/// </summary>
+		/// <param name="Version">Version string.</param>
+		/// <param name="Count">Number of references using this version.</param>
+		public record VersionInfo(string Version, int Count);
+
+		/// <summary>
+		/// Represents statistical summary of package analysis.
+		/// </summary>
+		/// <param name="TotalPackages">Total number of unique packages.</param>
+		/// <param name="PackagesWithMultipleVersions">Number of packages with version conflicts.</param>
+		/// <param name="PackagesOnNuGet">Number of packages found on NuGet.org.</param>
+		/// <param name="PackagesOnOtherFeeds">Number of packages found on alternate feeds.</param>
+		/// <param name="DeprecatedPackages">Number of deprecated packages.</param>
+		/// <param name="InternalPackages">Number of internal packages with identified sources.</param>
+		/// <param name="PinnedCount">Number of pinned packages.</param>
+		/// <param name="OutdatedPackages">Number of outdated packages (excluding updateable).</param>
+		/// <param name="UpdateablePackages">Number of packages that can only be updated to higher major versions.</param>
+		/// <param name="VulnerablePackages">Number of potentially vulnerable packages.</param>
+		/// <param name="UnknownPackages">Number of packages with no identified source.</param>
+		public record PackageStatistics(
+			int TotalPackages,
+			int PackagesWithMultipleVersions,
+			int PackagesOnNuGet,
+			int PackagesOnOtherFeeds,
+			int DeprecatedPackages,
+			int InternalPackages,
+			int PinnedCount,
+			int OutdatedPackages,
+			int UpdateablePackages,
+			int VulnerablePackages,
+			int UnknownPackages);
+
+		/// <summary>
+		/// Represents a summary of package references grouped by package name.
+		/// </summary>
+		/// <param name="PackageName">Package identifier.</param>
+		/// <param name="TotalReferences">Total number of references to this package.</param>
+		/// <param name="Versions">List of distinct versions with their usage counts.</param>
+		/// <param name="UnspecifiedVersionCount">Number of references without a specified version.</param>
+		/// <param name="NuGetInfo">Resolved NuGet metadata (optional).</param>
+		public record PackageSummary(
+			string PackageName,
+			int TotalReferences,
+			List<VersionInfo> Versions,
+			int UnspecifiedVersionCount,
+			NuGetPackageResolver.PackageInfo? NuGetInfo);
+
+		/// <summary>
 		/// Represents a package reference found in a project file.
 		/// </summary>
 		/// <param name="PackageName">Package identifier.</param>
@@ -772,23 +821,21 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Groups package references by package name and creates summary information.
 		/// </summary>
-		private static IOrderedEnumerable<dynamic> GroupPackagesByName(List<PackageReference> packageReferences)
+		private static IOrderedEnumerable<PackageSummary> GroupPackagesByName(List<PackageReference> packageReferences)
 		{
 			return packageReferences
 				.GroupBy(pr => pr.PackageName)
-				.Select(g => new
-				{
-					PackageName = g.Key,
-					TotalReferences = g.Count(),
-					Versions = g.Where(pr => !string.IsNullOrEmpty(pr.Version))
-									   .GroupBy(pr => pr.Version!)
-									   .Select(vg => new { Version = vg.Key, Count = vg.Count() })
-									   .OrderByDescending(v => v.Count)
-									   .ThenBy(v => v.Version)
-									   .ToList(),
-					UnspecifiedVersionCount = g.Count(pr => string.IsNullOrEmpty(pr.Version)),
-					NuGetInfo = g.FirstOrDefault()?.NuGetInfo // All references of same package should have same NuGet info
-				})
+				.Select(g => new PackageSummary(
+					PackageName: g.Key,
+					TotalReferences: g.Count(),
+					Versions: g.Where(pr => !string.IsNullOrEmpty(pr.Version))
+								   .GroupBy(pr => pr.Version!)
+								   .Select(vg => new VersionInfo(vg.Key, vg.Count()))
+								   .OrderByDescending(v => v.Count)
+								   .ThenBy(v => v.Version)
+								   .ToList(),
+					UnspecifiedVersionCount: g.Count(pr => string.IsNullOrEmpty(pr.Version)),
+					NuGetInfo: g.FirstOrDefault()?.NuGetInfo)) // All references of same package should have same NuGet info
 				.OrderByDescending(p => p.TotalReferences)
 				.ThenBy(p => p.PackageName);
 		}
@@ -796,7 +843,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints the list of packages with their details.
 		/// </summary>
-		private static void PrintPackageList(IEnumerable<dynamic> packageSummary, bool showNuGetDetails, bool showDetailedInfo, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
+		private static void PrintPackageList(IEnumerable<PackageSummary> packageSummary, bool showNuGetDetails, bool showDetailedInfo, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
 		{
 			foreach (var package in packageSummary)
 			{
@@ -807,7 +854,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints a single package summary entry.
 		/// </summary>
-		private static void PrintSinglePackageSummary(dynamic package, bool showNuGetDetails, bool showDetailedInfo, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
+		private static void PrintSinglePackageSummary(PackageSummary package, bool showNuGetDetails, bool showDetailedInfo, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
 		{
 			var versionCount = CalculateVersionCount(package);
 			var versionText = versionCount == 1 ? "version" : "versions";
@@ -828,7 +875,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Calculates the total version count for a package including unspecified versions.
 		/// </summary>
-		private static int CalculateVersionCount(dynamic package)
+		private static int CalculateVersionCount(PackageSummary package)
 		{
 			var versionCount = package.Versions.Count;
 
@@ -841,7 +888,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints status indicators for a package (NuGet availability, deprecation, etc.).
 		/// </summary>
-		private static void PrintPackageStatusIndicators(dynamic package, bool showNuGetDetails, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
+		private static void PrintPackageStatusIndicators(PackageSummary package, bool showNuGetDetails, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
 		{
 			if (!showNuGetDetails || package.NuGetInfo == null)
 				return;
@@ -861,7 +908,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints status indicators for packages available on NuGet.org.
 		/// </summary>
-		private static void PrintNuGetOrgStatusIndicators(dynamic nugetInfo, bool isPinned, Dictionary<string, string?>? pinnedPackages, string packageName, VersionWarningConfig? warningConfig = null)
+		private static void PrintNuGetOrgStatusIndicators(NuGetPackageResolver.PackageInfo nugetInfo, bool isPinned, Dictionary<string, string?>? pinnedPackages, string packageName, VersionWarningConfig? warningConfig = null)
 		{
 			ConsoleWriter.Out.WriteColored(ConsoleColor.Green, " \u2713");
 
@@ -897,11 +944,16 @@ namespace NuGroom.Nuget
 		/// Determines whether an outdated package is only updateable to a higher major version
 		/// (i.e., the used version is already the latest within the configured scope).
 		/// </summary>
-		private static bool IsUpdateableOnly(dynamic nugetInfo, string packageName, VersionWarningConfig? warningConfig)
+		private static bool IsUpdateableOnly(NuGetPackageResolver.PackageInfo? nugetInfo, string packageName, VersionWarningConfig? warningConfig)
 		{
 			var level = warningConfig?.GetLevelForPackage(packageName) ?? VersionWarningLevel.None;
 
 			if (level == VersionWarningLevel.None || level == VersionWarningLevel.Major)
+			{
+				return false;
+			}
+
+			if (nugetInfo == null)
 			{
 				return false;
 			}
@@ -921,7 +973,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints status indicators for packages from alternate sources (not NuGet.org).
 		/// </summary>
-		private static void PrintAlternateSourceIndicators(dynamic nugetInfo)
+		private static void PrintAlternateSourceIndicators(NuGetPackageResolver.PackageInfo nugetInfo)
 		{
 			if (!string.IsNullOrEmpty(nugetInfo.FeedName))
 			{
@@ -940,7 +992,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints version breakdown for packages with multiple versions.
 		/// </summary>
-		private static void PrintVersionBreakdown(dynamic package, int versionCount)
+		private static void PrintVersionBreakdown(PackageSummary package, int versionCount)
 		{
 			if (versionCount <= 1 && package.Versions.Count == 0)
 				return;
@@ -967,7 +1019,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints detailed NuGet information for a package.
 		/// </summary>
-		private static void PrintPackageNuGetDetails(dynamic package, bool showNuGetDetails, bool showDetailedInfo, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
+		private static void PrintPackageNuGetDetails(PackageSummary package, bool showNuGetDetails, bool showDetailedInfo, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
 		{
 			if (!showNuGetDetails || package.NuGetInfo == null)
 				return;
@@ -977,7 +1029,7 @@ namespace NuGroom.Nuget
 			if (package.NuGetInfo.ExistsOnNuGetOrg)
 			{
 				var level = warningConfig?.GetLevelForPackage(package.PackageName) ?? VersionWarningLevel.None;
-				var usedVersions = ((IEnumerable<dynamic>)package.Versions).Select(v => (string)v.Version).ToList();
+				var usedVersions = package.Versions.Select(v => v.Version).ToList();
 				PrintNuGetOrgDetails(package.NuGetInfo, isPinnedDetail, pinnedPackages, package.PackageName, showDetailedInfo, level, usedVersions);
 			}
 			else
@@ -989,7 +1041,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints detailed information for packages on NuGet.org.
 		/// </summary>
-		private static void PrintNuGetOrgDetails(dynamic nugetInfo, bool isPinned, Dictionary<string, string?>? pinnedPackages, string packageName, bool showDetailedInfo, VersionWarningLevel level = VersionWarningLevel.None, List<string>? usedVersions = null)
+		private static void PrintNuGetOrgDetails(NuGetPackageResolver.PackageInfo nugetInfo, bool isPinned, Dictionary<string, string?>? pinnedPackages, string packageName, bool showDetailedInfo, VersionWarningLevel level = VersionWarningLevel.None, List<string>? usedVersions = null)
 		{
 			ConsoleWriter.Out.WriteLineColored(ConsoleColor.Cyan, $"  \U0001F517 {nugetInfo.PackageUrl}");
 
@@ -1029,7 +1081,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints vulnerability details for a package.
 		/// </summary>
-		private static void PrintVulnerabilityDetails(dynamic nugetInfo)
+		private static void PrintVulnerabilityDetails(NuGetPackageResolver.PackageInfo nugetInfo)
 		{
 			if (!nugetInfo.IsVulnerable || nugetInfo.Vulnerabilities == null || nugetInfo.Vulnerabilities.Count == 0)
 				return;
@@ -1047,23 +1099,15 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints extended metadata for a package (authors, publish date, project URL, tags).
 		/// </summary>
-		private static void PrintExtendedPackageMetadata(dynamic nugetInfo)
+		private static void PrintExtendedPackageMetadata(NuGetPackageResolver.PackageInfo nugetInfo)
 		{
 			if (!string.IsNullOrEmpty(nugetInfo.Authors))
 			{
 				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Gray, $"  \U0001F464 Authors: {nugetInfo.Authors}");
 			}
 
-			string? publishedText = null;
+			string? publishedText = nugetInfo.Published?.ToString(PublishedDateFormat);
 
-			if (nugetInfo.Published is DateTimeOffset publishedOffset)
-			{
-				publishedText = publishedOffset.ToString(PublishedDateFormat);
-			}
-			else if (nugetInfo.Published is DateTime publishedDate)
-			{
-				publishedText = publishedDate.ToString(PublishedDateFormat);
-			}
 
 			if (publishedText != null)
 			{
@@ -1077,14 +1121,14 @@ namespace NuGroom.Nuget
 
 			if (nugetInfo.Tags.Count > 0)
 			{
-				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Gray, $"  \U0001F3F7\uFE0F Tags: {string.Join(", ", ((IEnumerable<string>)nugetInfo.Tags).Take(5))}");
+				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Gray, $"  \U0001F3F7\uFE0F Tags: {string.Join(", ", nugetInfo.Tags.Take(5))}");
 			}
 		}
 
 		/// <summary>
 		/// Prints detailed information for packages from alternate sources.
 		/// </summary>
-		private static void PrintAlternateSourceDetails(dynamic nugetInfo)
+		private static void PrintAlternateSourceDetails(NuGetPackageResolver.PackageInfo nugetInfo)
 		{
 			if (!string.IsNullOrEmpty(nugetInfo.FeedName))
 			{
@@ -1099,7 +1143,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints details for packages found on alternate feeds.
 		/// </summary>
-		private static void PrintAlternateFeedDetails(dynamic nugetInfo)
+		private static void PrintAlternateFeedDetails(NuGetPackageResolver.PackageInfo nugetInfo)
 		{
 			ConsoleWriter.Out.Cyan()
 			 .WriteLine($"  \U0001F517 Feed: {nugetInfo.FeedName}");
@@ -1115,7 +1159,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints details for packages found through source project cross-referencing.
 		/// </summary>
-		private static void PrintSourceProjectDetails(dynamic nugetInfo)
+		private static void PrintSourceProjectDetails(NuGetPackageResolver.PackageInfo nugetInfo)
 		{
 			var topMatch = nugetInfo.SourceProjects.First();
 			var confidencePercentage = (int)(topMatch.MatchConfidence * 100);
@@ -1125,7 +1169,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints summary statistics for all packages.
 		/// </summary>
-		private static void PrintSummaryStatistics(IEnumerable<dynamic> packageSummary, bool showNuGetDetails, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
+		private static void PrintSummaryStatistics(IEnumerable<PackageSummary> packageSummary, bool showNuGetDetails, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
 		{
 			var stats = CalculateSummaryStatistics(packageSummary, showNuGetDetails, pinnedPackages, warningConfig);
 
@@ -1142,33 +1186,35 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Calculates summary statistics for packages.
 		/// </summary>
-		private static dynamic CalculateSummaryStatistics(IEnumerable<dynamic> packageSummary, bool showNuGetDetails, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
+		private static PackageStatistics CalculateSummaryStatistics(IEnumerable<PackageSummary> packageSummary, bool showNuGetDetails, Dictionary<string, string?>? pinnedPackages, VersionWarningConfig? warningConfig = null)
 		{
 			var totalPackages = packageSummary.Count();
 			var packagesWithMultipleVersions = packageSummary.Count(p => p.Versions.Count + (p.UnspecifiedVersionCount > 0 ? 1 : 0) > 1);
 			var allOutdatedNonPinned = showNuGetDetails ? packageSummary.Where(p => p.NuGetInfo?.IsOutdated == true && pinnedPackages?.ContainsKey(p.PackageName) != true).ToList() : [];
-			var updateableCount = showNuGetDetails ? allOutdatedNonPinned.Count(p => IsUpdateableOnly(p.NuGetInfo, (string)p.PackageName, warningConfig)) : 0;
+			var updateableCount = showNuGetDetails ? allOutdatedNonPinned.Count(p => IsUpdateableOnly(p.NuGetInfo, p.PackageName, warningConfig)) : 0;
+			var packagesOnNuGet = showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.ExistsOnNuGetOrg == true) : 0;
+			var packagesOnOtherFeeds = showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.ExistsOnNuGetOrg == false && !string.IsNullOrEmpty(p.NuGetInfo?.FeedName)) : 0;
+			var internalPackages = showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.ExistsOnNuGetOrg == false && string.IsNullOrEmpty(p.NuGetInfo?.FeedName) && p.NuGetInfo?.SourceProjects?.Count > 0) : 0;
+			var unknownPackages = totalPackages - packagesOnNuGet - packagesOnOtherFeeds - internalPackages;
 
-			return new
-			{
-				TotalPackages = totalPackages,
-				PackagesWithMultipleVersions = packagesWithMultipleVersions,
-				PackagesOnNuGet = showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.ExistsOnNuGetOrg == true) : 0,
-				PackagesOnOtherFeeds = showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.ExistsOnNuGetOrg == false && !string.IsNullOrEmpty(p.NuGetInfo?.FeedName)) : 0,
-				DeprecatedPackages = showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.IsDeprecated == true) : 0,
-				InternalPackages = showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.ExistsOnNuGetOrg == false && string.IsNullOrEmpty(p.NuGetInfo?.FeedName) && p.NuGetInfo?.SourceProjects?.Count > 0) : 0,
-				PinnedCount = pinnedPackages?.Count ?? 0,
-				OutdatedPackages = showNuGetDetails ? allOutdatedNonPinned.Count - updateableCount : 0,
-				UpdateablePackages = updateableCount,
-				VulnerablePackages = showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.IsVulnerable == true) : 0,
-				UnknownPackages = 0 // Calculated after other counts
-			};
+			return new PackageStatistics(
+				TotalPackages: totalPackages,
+				PackagesWithMultipleVersions: packagesWithMultipleVersions,
+				PackagesOnNuGet: packagesOnNuGet,
+				PackagesOnOtherFeeds: packagesOnOtherFeeds,
+				DeprecatedPackages: showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.IsDeprecated == true) : 0,
+				InternalPackages: internalPackages,
+				PinnedCount: pinnedPackages?.Count ?? 0,
+				OutdatedPackages: showNuGetDetails ? allOutdatedNonPinned.Count - updateableCount : 0,
+				UpdateablePackages: updateableCount,
+				VulnerablePackages: showNuGetDetails ? packageSummary.Count(p => p.NuGetInfo?.IsVulnerable == true) : 0,
+				UnknownPackages: unknownPackages);
 		}
 
 		/// <summary>
 		/// Prints the statistics header with total package count.
 		/// </summary>
-		private static void PrintStatisticsHeader(dynamic stats)
+		private static void PrintStatisticsHeader(PackageStatistics stats)
 		{
 			ConsoleWriter.Out.WriteLine(new string('-', 40))
 			 .WriteLine($"Total unique packages: {stats.TotalPackages}");
@@ -1177,7 +1223,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints NuGet-related statistics.
 		/// </summary>
-		private static void PrintNuGetStatistics(dynamic stats)
+		private static void PrintNuGetStatistics(PackageStatistics stats)
 		{
 			ConsoleWriter.Out.WriteLineColored(ConsoleColor.Green, $"Available on NuGet.org: {stats.PackagesOnNuGet}");
 
@@ -1191,11 +1237,10 @@ namespace NuGroom.Nuget
 				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Blue, $"Internal packages (with source): {stats.InternalPackages}");
 			}
 
-			var unknownPackages = stats.TotalPackages - stats.PackagesOnNuGet - stats.PackagesOnOtherFeeds - stats.InternalPackages;
-
-			if (unknownPackages > 0)
+			if (stats.UnknownPackages > 0)
+			if (stats.UnknownPackages > 0)
 			{
-				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Yellow, $"Unknown packages (no source found): {unknownPackages}");
+				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Yellow, $"Unknown packages (no source found): {stats.UnknownPackages}");
 			}
 
 			if (stats.PinnedCount > 0)
@@ -1227,7 +1272,7 @@ namespace NuGroom.Nuget
 		/// <summary>
 		/// Prints version conflict statistics.
 		/// </summary>
-		private static void PrintVersionConflictStatistics(dynamic stats)
+		private static void PrintVersionConflictStatistics(PackageStatistics stats)
 		{
 			if (stats.PackagesWithMultipleVersions > 0)
 			{
@@ -1244,7 +1289,7 @@ namespace NuGroom.Nuget
 		/// </summary>
 		/// <param name="title">Section title to display.</param>
 		/// <param name="packages">Sequence of package projection objects containing summary metadata.</param>
-		private static void PrintCategorySection(string title, IEnumerable<dynamic> packages, VersionWarningConfig? warningConfig = null)
+		private static void PrintCategorySection(string title, IEnumerable<PackageSummary> packages, VersionWarningConfig? warningConfig = null)
 		{
 			var list = packages.ToList();
 			if (!list.Any()) return;
@@ -1257,7 +1302,7 @@ namespace NuGroom.Nuget
 			{
 				ConsoleWriter.Out.WriteLine($" - {pkg.PackageName} (refs: {pkg.TotalReferences})");
 				var level = warningConfig?.GetLevelForPackage(pkg.PackageName) ?? VersionWarningLevel.None;
-				var usedVersions = ((IEnumerable<dynamic>)pkg.Versions).Select(v => (string)v.Version).ToList();
+				var usedVersions = pkg.Versions.Select(v => v.Version).ToList();
 				PrintPackageDetails(pkg.NuGetInfo, level, usedVersions);
 			}
 		}
@@ -1266,7 +1311,7 @@ namespace NuGroom.Nuget
 		/// Prints detail lines (outdated, deprecated, vulnerable) for a single package's NuGet info.
 		/// </summary>
 		/// <param name="info">The NuGet metadata for a package, or null if unavailable.</param>
-		private static void PrintPackageDetails(dynamic info, VersionWarningLevel level = VersionWarningLevel.None, List<string>? usedVersions = null)
+		private static void PrintPackageDetails(NuGetPackageResolver.PackageInfo? info, VersionWarningLevel level = VersionWarningLevel.None, List<string>? usedVersions = null)
 		{
 			if (info == null)
 			{
