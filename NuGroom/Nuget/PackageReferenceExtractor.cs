@@ -1238,7 +1238,6 @@ namespace NuGroom.Nuget
 			}
 
 			if (stats.UnknownPackages > 0)
-			if (stats.UnknownPackages > 0)
 			{
 				ConsoleWriter.Out.WriteLineColored(ConsoleColor.Yellow, $"Unknown packages (no source found): {stats.UnknownPackages}");
 			}
