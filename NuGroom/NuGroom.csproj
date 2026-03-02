@@ -21,9 +21,17 @@
     <RepositoryUrl>https://github.com/Hefaistos68/NuGroom</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Copyright>(c) 2026 Hefaistos68.dev</Copyright>
+    <GeneratePackageOnBuild Condition="'$(Configuration)' == 'Release'">True</GeneratePackageOnBuild>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="..\LICENSE.txt">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
     <None Include="..\docs\*.md" Pack="true" PackagePath="docs\" />
   </ItemGroup>

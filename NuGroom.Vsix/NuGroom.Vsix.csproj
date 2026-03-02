@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <IncludeAssemblyInVSIXContainer>false</IncludeAssemblyInVSIXContainer>
+    <CopyBuildOutputToOutputDirectory>false</CopyBuildOutputToOutputDirectory>
+    <CopyOutputSymbolsToOutputDirectory>false</CopyOutputSymbolsToOutputDirectory>
+    <VsixLanguage>en-US</VsixLanguage>
+    <VsixVersion>0.1.0</VsixVersion>
+    <VsixId>NuGroom.Vsix</VsixId>
+    <VsixDisplayName>NuGroom Tool</VsixDisplayName>
+    <VsixDescription>A VSIX that bundles the NuGroom dotnet tool package.</VsixDescription>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.9.3610" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="source.extension.vsixmanifest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(IntermediateOutputPath)toolpack\NuGroom.*.nupkg">
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <Link>NuGroom.*.nupkg</Link>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Resources\Hefaistos Logo 128.jpg" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Resources\Hefaistos Logo 128.jpg">
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="PackNuGroomTool"
+          BeforeTargets="PrepareForBuild"
+          Inputs="..\NuGroom\NuGroom.csproj"
+          Outputs="$(IntermediateOutputPath)toolpack\NuGroom.*.nupkg">
+    <MakeDir Directories="$(IntermediateOutputPath)toolpack" />
+    <Exec Command="dotnet pack ..\NuGroom\NuGroom.csproj -c $(Configuration) -o $(IntermediateOutputPath)toolpack" />
+  </Target>
+</Project>
