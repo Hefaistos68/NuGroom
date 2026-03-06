@@ -1079,18 +1079,26 @@ namespace NuGroom.Nuget
 		}
 
 		/// <summary>
-		/// Prints vulnerability details for a package.
+		/// Prints vulnerability details for a package, using severity-appropriate colors.
 		/// </summary>
 		private static void PrintVulnerabilityDetails(NuGetPackageResolver.PackageInfo nugetInfo)
 		{
 			if (!nugetInfo.IsVulnerable || nugetInfo.Vulnerabilities == null || nugetInfo.Vulnerabilities.Count == 0)
+			{
 				return;
-
-			ConsoleWriter.Out.Red();
+			}
 
 			foreach (var v in nugetInfo.Vulnerabilities)
 			{
-				ConsoleWriter.Out.WriteLine($"  \U0001F6A8 Vulnerability: {v}");
+				var color = v switch
+				{
+					_ when v.Contains("Critical") => ConsoleColor.Red,
+					_ when v.Contains("High")     => ConsoleColor.DarkRed,
+					_ when v.Contains("Moderate")  => ConsoleColor.Yellow,
+					_ => ConsoleColor.Gray
+				};
+
+				ConsoleWriter.Out.WriteLineColored(color, $"  \U0001F6A8 {v}");
 			}
 
 			ConsoleWriter.Out.ResetColor();

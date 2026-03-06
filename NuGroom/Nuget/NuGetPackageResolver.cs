@@ -602,29 +602,36 @@ namespace NuGroom.Nuget
 		}
 
 		/// <summary>
-		/// Detects potential vulnerabilities in a package based on description keywords and publish date.
+		/// Extracts known vulnerabilities from the NuGet feed metadata for a package.
+		/// Returns a human-readable list combining the severity level and advisory URL
+		/// for each reported vulnerability.
 		/// </summary>
-		private static List<string> DetectVulnerabilities(IPackageSearchMetadata stable)
+		internal static List<string> DetectVulnerabilities(IPackageSearchMetadata stable)
 		{
 			var vulnerabilities = new List<string>();
 
-			if (!string.IsNullOrEmpty(stable.Description))
+			if (stable.Vulnerabilities == null)
 			{
-				var desc = stable.Description.ToLowerInvariant();
-				string[] vulnKeywords = { "vulnerability", "security issue", "cve", "xss", "sql injection" };
-
-				foreach (var kw in vulnKeywords)
-				{
-					if (desc.Contains(kw))
-					{
-						vulnerabilities.Add($"Keyword detected: {kw}");
-					}
-				}
+				return vulnerabilities;
 			}
 
-			if (stable.Published.HasValue && stable.Published.Value < DateTimeOffset.UtcNow.AddYears(-3))
+			foreach (var vuln in stable.Vulnerabilities)
 			{
-				vulnerabilities.Add("Package publish date older than 3 years (potentially outdated)");
+				var severity = vuln.Severity switch
+				{
+					0 => "Low",
+					1 => "Moderate",
+					2 => "High",
+					3 => "Critical",
+					_ => $"Unknown ({vuln.Severity})"
+				};
+
+				var advisory = vuln.AdvisoryUrl?.ToString();
+				var detail = string.IsNullOrEmpty(advisory)
+					? $"Severity: {severity}"
+					: $"Severity: {severity} — {advisory}";
+
+				vulnerabilities.Add(detail);
 			}
 
 			return vulnerabilities;
