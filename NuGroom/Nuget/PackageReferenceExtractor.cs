@@ -1092,9 +1092,9 @@ namespace NuGroom.Nuget
 			{
 				var color = v switch
 				{
-					_ when v.Contains("Critical") => ConsoleColor.Red,
-					_ when v.Contains("High")     => ConsoleColor.DarkRed,
-					_ when v.Contains("Moderate")  => ConsoleColor.Yellow,
+					_ when v.Contains("Critical", StringComparison.OrdinalIgnoreCase) => ConsoleColor.Red,
+					_ when v.Contains("High", StringComparison.OrdinalIgnoreCase)     => ConsoleColor.DarkRed,
+					_ when v.Contains("Moderate", StringComparison.OrdinalIgnoreCase)  => ConsoleColor.Yellow,
 					_ => ConsoleColor.Gray
 				};
 
