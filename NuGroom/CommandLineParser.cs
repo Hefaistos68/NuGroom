@@ -535,6 +535,10 @@ namespace NuGroom
 							state.VulnerabilityConfig ??= new VulnerabilityConfig();
 							state.VulnerabilityConfig.CachePath = args[++i];
 						}
+						else
+						{
+							Console.WriteLine("Warning: --vuln-cache-path requires a path.");
+						}
 
 						break;
 					case "--no-vuln-cache":
@@ -545,6 +549,10 @@ namespace NuGroom
 						if (i + 1 < args.Length)
 						{
 							state.ExportVulnerabilitiesPath = args[++i];
+						}
+						else
+						{
+							Console.WriteLine("Warning: --export-vulnerabilities requires a path.");
 						}
 
 						break;
