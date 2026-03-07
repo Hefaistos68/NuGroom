@@ -139,6 +139,21 @@ Version properties that do not exist in a project file are left unchanged.
 
 ---
 
+## Vulnerability Scanning Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--skip-vuln` | Disable OSV.dev vulnerability database queries (NuGet feed advisories still shown) | OSV enabled |
+| `--no-vuln-cache` | Disable local vulnerability result caching | Cache enabled |
+| `--vuln-cache-path <path>` | Path for the vulnerability cache file | `.nugroom/vuln-cache.json` |
+| `--export-vulnerabilities <path>` | Export vulnerability report to a separate file (format via `--export-format`) | |
+
+Vulnerability scanning is **enabled by default** when NuGet resolution is active. Use `--skip-vuln` to disable external database queries. NuGet feed-embedded advisories are always shown regardless of this flag.
+
+See [Vulnerability Scanning](vulnerability.md) for configuration file options, caching details, and data sources.
+
+---
+
 ## Help
 
 | Option | Short | Description |

@@ -47,6 +47,9 @@ namespace NuGroom.Workflows
 			ExportWarnings(warnings, parseResult.ExportWarningsPath, parseResult.ExportFormat);
 			ExportRecommendations(recommendations, parseResult.ExportRecommendationsPath, parseResult.ExportFormat);
 
+			// Vulnerability report export
+			ExportVulnerabilities(references, parseResult.ExportVulnerabilitiesPath, parseResult.ExportFormat);
+
 			// SPDX 3.0.0 SBOM export (always JSON-LD, independent of ExportFormat)
 			ExportSbom(references, parseResult.ExportSbomPath);
 		}
@@ -184,6 +187,34 @@ namespace NuGroom.Workflows
 
 			SpdxSbomExporter.Export(references, path!);
 			ConsoleWriter.Out.Green().WriteLine($"SBOM exported (SPDX 3.0.0): {path}").ResetColor();
+		}
+
+		/// <summary>
+		/// Exports a standalone vulnerability report in the configured format
+		/// </summary>
+		private static void ExportVulnerabilities(
+			List<PackageReferenceExtractor.PackageReference> references, string? path, ExportFormat format)
+		{
+			if (string.IsNullOrWhiteSpace(path))
+			{
+				return;
+			}
+
+			if (!references.Any(r => r.NuGetInfo is { IsVulnerable: true }))
+			{
+				return;
+			}
+
+			if (format == ExportFormat.Csv)
+			{
+				ReportExporter.ExportVulnerabilitiesCsv(references, path!);
+			}
+			else
+			{
+				ReportExporter.ExportVulnerabilitiesJson(references, path!);
+			}
+
+			ConsoleWriter.Out.Green().WriteLine($"Vulnerability report exported ({format}): {path}").ResetColor();
 		}
 	}
 }

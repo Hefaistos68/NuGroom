@@ -41,6 +41,7 @@ This section outlines the absolute order of operations. These rules have the hig
 
 # Primordial Instructions to follow when generating new or modifying existing C# code:
 
+- do not use anonymous types or dynamic objects, always use explicit types
 - When returning code, always format with an empty line before the following statements, except if the line before is a comment or opening bracket: return, if, for, foreach, try
 - Always separate variable definitions or declarations from c# language statements with an empty line.
 - Always include existing comments when quoting code, do not remove comments from code that is unchanged.

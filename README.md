@@ -8,11 +8,12 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
 
 - **Repository Scanning** — connects to Azure DevOps and discovers all project files across repositories
 - **NuGet Resolution** — resolves package metadata from multiple feeds with PAT authentication
+- **Vulnerability Scanning** — checks packages against NuGet feed advisories and the OSV.dev database with local caching
 - **Central Package Management** — automatic CPM detection, updates, and migration (`--migrate-to-cpm`)
 - **Automated Updates** — creates feature branches and pull requests for outdated packages
 - **Package Sync** — force a specific package to an exact version across all repositories
 - **Version Warnings** — configurable warnings for version differences with actionable recommendations
-- **Health Indicators** — flags deprecated, outdated, and potentially vulnerable packages
+- **Health Indicators** — flags deprecated, outdated, and vulnerable packages
 - **Internal Package Detection** — identifies internal packages and their likely source projects
 - **Export** — JSON, CSV, and SPDX 3.0.0 SBOM export
 - **Renovate Compatibility** — respects `ignoreDeps`, disabled `packageRules`, and `reviewers`
@@ -56,6 +57,7 @@ nugroom --config settings.json --update-references --update-scope Patch
 | [CLI Reference](docs/cli-reference.md) | Complete list of all command line options |
 | [Configuration](docs/configuration.md) | Config file format, fields, feed authentication, and environment variables |
 | [Features](docs/features.md) | CPM, version warnings, filtering, health indicators, and more |
+| [Vulnerability Scanning](docs/vulnerability.md) | NuGet advisories, OSV.dev integration, caching, and configuration |
 | [Automated Updates](docs/automated-updates.md) | Package updates, sync, version increment, and PR workflow |
 | [Renovate Compatibility](docs/renovate-compatibility.md) | Integration with Renovate configuration |
 | [Export Formats](docs/export-formats.md) | JSON, CSV, and SPDX 3.0.0 SBOM export |
@@ -72,6 +74,6 @@ nugroom --config settings.json --update-references --update-scope Patch
 - ✅ Automated package updates with branch creation and PR workflow
 - ✅ Renovate compatibility (ignoreDeps, packageRules, reviewers)
 - ✅ Central Package Management (CPM) detection, updates, and migration
-- Integration with official vulnerability databases
+- ✅ Integration with official vulnerability databases (NuGet advisories + OSV.dev)
 - Graph visualization of internal dependencies
 - Support for Azure Key Vault credential storage

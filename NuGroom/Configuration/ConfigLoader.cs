@@ -41,14 +41,14 @@ namespace NuGroom.Configuration
 		/// </summary>
 		public ApplyConfigContext()
 		{
-			Feeds                     = new List<Feed>();
-			ExcludePrefixes           = new List<string>();
-			ExcludePackages           = new List<string>();
-			ExcludePatterns           = new List<string>();
-			FeedAuth                  = new List<FeedAuth>();
-			ExcludeCsprojPatterns     = new List<string>();
-			ExcludeRepositories       = new List<string>();
-			IncludeRepositories       = new List<string>();
+			Feeds = new List<Feed>();
+			ExcludePrefixes = new List<string>();
+			ExcludePackages = new List<string>();
+			ExcludePatterns = new List<string>();
+			FeedAuth = new List<FeedAuth>();
+			ExcludeCsprojPatterns = new List<string>();
+			ExcludeRepositories = new List<string>();
+			IncludeRepositories = new List<string>();
 		}
 
 		/// <summary>Target Azure DevOps organization.</summary>
@@ -89,6 +89,9 @@ namespace NuGroom.Configuration
 
 		/// <summary>Destination path for SBOM export.</summary>
 		public string? ExportSbomPath { get; set; }
+
+		/// <summary>Destination path for vulnerability report export.</summary>
+		public string? ExportVulnerabilitiesPath { get; set; }
 
 		/// <summary>Export format override.</summary>
 		public ExportFormat? ExportFormat { get; set; }
@@ -131,6 +134,9 @@ namespace NuGroom.Configuration
 
 		/// <summary>Whether to include packages.config references.</summary>
 		public bool? IncludePackagesConfig { get; set; }
+
+		/// <summary>Vulnerability database configuration.</summary>
+		public VulnerabilityConfig? VulnerabilityConfig { get; set; }
 	}
 
 	/// <summary>
@@ -246,6 +252,12 @@ namespace NuGroom.Configuration
 		public string? ExportSbom { get; set; }
 
 		/// <summary>
+		/// Path to export a standalone vulnerability report.
+		/// If null, vulnerability data is only shown in the console and included in the main package export.
+		/// </summary>
+		public string? ExportVulnerabilities { get; set; }
+
+		/// <summary>
 		/// Output format for exported reports. Defaults to <see cref="Configuration.ExportFormat.Json"/>.
 		/// </summary>
 		public ExportFormat? ExportFormat { get; set; }
@@ -274,6 +286,11 @@ namespace NuGroom.Configuration
 		/// If true, include legacy <c>packages.config</c> references in the scan.
 		/// </summary>
 		public bool? IncludePackagesConfig { get; set; }
+
+		/// <summary>
+		/// Configuration for vulnerability database lookups (OSV.dev, caching).
+		/// </summary>
+		public VulnerabilityConfig? Vulnerability { get; set; }
 	}
 
 	/// <summary>
@@ -534,6 +551,11 @@ namespace NuGroom.Configuration
 				context.ExportSbomPath = config.ExportSbom;
 			}
 
+			if (!string.IsNullOrWhiteSpace(config.ExportVulnerabilities) && string.IsNullOrWhiteSpace(context.ExportVulnerabilitiesPath))
+			{
+				context.ExportVulnerabilitiesPath = config.ExportVulnerabilities;
+			}
+
 			if (config.ExportFormat.HasValue && context.ExportFormat == null)
 			{
 				context.ExportFormat = config.ExportFormat.Value;
@@ -558,6 +580,11 @@ namespace NuGroom.Configuration
 			if (config.Update != null && context.UpdateConfig == null)
 			{
 				context.UpdateConfig = config.Update;
+			}
+
+			if (config.Vulnerability != null && context.VulnerabilityConfig == null)
+			{
+				context.VulnerabilityConfig = config.Vulnerability;
 			}
 		}
 	}

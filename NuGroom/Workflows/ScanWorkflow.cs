@@ -3,6 +3,7 @@ using Microsoft.TeamFoundation.SourceControl.WebApi;
 using NuGroom.ADO;
 using NuGroom.Configuration;
 using NuGroom.Nuget;
+using NuGroom.Vulnerability;
 
 namespace NuGroom.Workflows
 {
@@ -20,7 +21,8 @@ namespace NuGroom.Workflows
 		VersionWarningConfig? VersionWarningConfig,
 		bool IgnoreRenovate,
 		List<PinnedPackage>? PinnedPackages = null,
-		bool IncludePackagesConfig = false)
+		bool IncludePackagesConfig = false,
+		VulnerabilityConfig? VulnerabilityConfig = null)
 	{
 		/// <summary>
 		/// Creates a <see cref="ScanOptions"/> from a validated <see cref="ParseResult"/>.
@@ -41,7 +43,8 @@ namespace NuGroom.Workflows
 				result.VersionWarningConfig,
 				result.IgnoreRenovate,
 				result.UpdateConfig?.PinnedPackages,
-				result.IncludePackagesConfig);
+				result.IncludePackagesConfig,
+				result.VulnerabilityConfig);
 		}
 
 		/// <summary>
@@ -461,6 +464,15 @@ namespace NuGroom.Workflows
 			ConsoleWriter.Out.WriteLine("Resolving NuGet package information and cross-referencing source projects...");
 			var uniquePackages = tempReferences.Select(pr => pr.PackageName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 			var nugetInfos = await nugetResolver.ResolvePackagesAsync(uniquePackages, tempReferences);
+
+			// Enrich with external vulnerability databases (OSV.dev etc.)
+			var aggregator = BuildVulnerabilityAggregator(options.VulnerabilityConfig);
+
+			if (aggregator != null)
+			{
+				await aggregator.EnrichPackageInfosAsync(nugetInfos, tempReferences);
+			}
+
 			var result = new List<PackageReferenceExtractor.PackageReference>();
 
 			foreach (var packageRef in tempReferences)
@@ -476,6 +488,44 @@ namespace NuGroom.Workflows
 			}
 
 			return result;
+		}
+
+		/// <summary>
+		/// Builds a <see cref="VulnerabilityAggregator"/> from the current configuration.
+		/// Returns <c>null</c> when no external vulnerability sources are enabled.
+		/// </summary>
+		private static VulnerabilityAggregator? BuildVulnerabilityAggregator(VulnerabilityConfig? config)
+		{
+			config ??= new VulnerabilityConfig();
+
+			var sources = new List<IVulnerabilitySource>();
+
+			if (config.OsvEnabled)
+			{
+				var httpClient = new HttpClient();
+
+				if (!string.IsNullOrWhiteSpace(config.OsvBaseUrl))
+				{
+					httpClient.BaseAddress = new Uri(config.OsvBaseUrl);
+				}
+
+				sources.Add(new OsvVulnerabilitySource(httpClient));
+			}
+
+			if (sources.Count == 0)
+			{
+				return null;
+			}
+
+			VulnerabilityCache? cache = null;
+
+			if (config.CacheEnabled)
+			{
+				var ttl = TimeSpan.FromHours(Math.Max(1, config.CacheTtlHours));
+				cache = new VulnerabilityCache(config.CachePath, ttl);
+			}
+
+			return new VulnerabilityAggregator(sources, cache);
 		}
 
 		/// <summary>

@@ -364,7 +364,7 @@ namespace NuGroom.Reporting
 		}
 
 		private static (int TotalWarnings, int PackagesWithWarnings, int MajorWarnings, int MinorWarnings, int PatchWarnings)
-			GetWarningStats(List<VersionWarning> warnings)
+				GetWarningStats(List<VersionWarning> warnings)
 		{
 			var packagesWithWarnings = warnings.Select(w => w.PackageName).Distinct().Count();
 			var majorWarnings = warnings.Count(w =>
@@ -375,6 +375,105 @@ namespace NuGroom.Reporting
 				NuGetPackageResolver.GetVersionDifference(w.CurrentVersion, w.ReferenceVersion) == "patch");
 
 			return (warnings.Count, packagesWithWarnings, majorWarnings, minorWarnings, patchWarnings);
+		}
+
+		private record VulnerabilityReportEntry(
+			string PackageName,
+			string? LatestVersion,
+			List<string?> UsedVersions,
+			List<string> Advisories,
+			List<VulnerabilityProjectEntry> AffectedProjects);
+
+		private record VulnerabilityProjectEntry(
+			string Repository,
+			string ProjectPath,
+			string? Version);
+
+		/// <summary>
+		/// Exports a standalone vulnerability report as JSON, listing every vulnerable package
+		/// with its advisory details grouped by package name.
+		/// </summary>
+		public static void ExportVulnerabilitiesJson(
+			IEnumerable<PackageReferenceExtractor.PackageReference> references, string path)
+		{
+			var entries = BuildVulnerabilityEntries(references).ToList();
+			var options = new JsonSerializerOptions
+			{
+				WriteIndented = true,
+				DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+			};
+
+			var dto = new
+			{
+				generatedUtc = DateTime.UtcNow,
+				totalVulnerabilities = entries.Sum(e => e.Advisories.Count),
+				packagesAffected = entries.Count,
+				packages = entries
+			};
+
+			var json = JsonSerializer.Serialize(dto, options);
+			File.WriteAllText(path, json, Encoding.UTF8);
+		}
+
+		/// <summary>
+		/// Exports a standalone vulnerability report as CSV with one row per advisory.
+		/// </summary>
+		public static void ExportVulnerabilitiesCsv(
+			IEnumerable<PackageReferenceExtractor.PackageReference> references, string path)
+		{
+			var sb = new StringBuilder();
+			sb.AppendLine("PackageName,Version,LatestVersion,Advisory");
+
+			foreach (var r in references)
+			{
+				var info = r.NuGetInfo;
+
+				if (info is not { IsVulnerable: true, Vulnerabilities.Count: > 0 })
+				{
+					continue;
+				}
+
+				foreach (var advisory in info.Vulnerabilities)
+				{
+					sb.AppendLine(string.Join(',', new[]
+					{
+							Csv(r.PackageName),
+							Csv(r.Version),
+							Csv(info.LatestVersion),
+							Csv(advisory)
+						}));
+				}
+			}
+
+			File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+		}
+
+		/// <summary>
+		/// Builds the grouped vulnerability entries for the JSON vulnerability report.
+		/// </summary>
+		private static IEnumerable<VulnerabilityReportEntry> BuildVulnerabilityEntries(
+			IEnumerable<PackageReferenceExtractor.PackageReference> references)
+		{
+			var vulnerable = references
+				.Where(r => r.NuGetInfo is { IsVulnerable: true, Vulnerabilities.Count: > 0 })
+				.GroupBy(r => r.PackageName, StringComparer.OrdinalIgnoreCase);
+
+			foreach (var group in vulnerable.OrderBy(g => g.Key))
+			{
+				var info = group.First().NuGetInfo!;
+				var usedVersions = group.Select(r => r.Version).Where(v => v != null).Distinct().ToList();
+
+				yield return new VulnerabilityReportEntry(
+					PackageName: group.Key,
+					LatestVersion: info.LatestVersion,
+					UsedVersions: usedVersions,
+					Advisories: info.Vulnerabilities!,
+					AffectedProjects: group.Select(r => new VulnerabilityProjectEntry(
+						Repository: r.RepositoryName,
+						ProjectPath: r.ProjectPath,
+						Version: r.Version
+					)).OrderBy(p => p.Repository).ThenBy(p => p.ProjectPath).ToList());
+			}
 		}
 
 		private static IEnumerable<PackageReportItem> BuildItems(IEnumerable<PackageReferenceExtractor.PackageReference> references)

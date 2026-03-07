@@ -46,6 +46,7 @@
     "ExportWarnings": "nugroom-warnings.json",
     "ExportRecommendations": "nugroom-recommendations.json",
     "ExportSbom": "nugroom-sbom.spdx.json",
+    "ExportVulnerabilities": "nugroom-vulnerabilities.json",
     "ExportFormat": "Json",
     "Update": {
         "Scope": "Patch",
@@ -73,5 +74,12 @@
         ],
         "TagCommits": false,
         "NoIncrementalPrs": false
+    },
+    "Vulnerability": {
+        "OsvEnabled": true,
+        "OsvBaseUrl": "https://api.osv.dev/v1/",
+        "CacheEnabled": true,
+        "CacheTtlHours": 24,
+        "CachePath": ".nugroom/vuln-cache.json"
     }
 }
