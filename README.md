@@ -7,10 +7,11 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
 ## Features
 
 - **Repository Scanning** — connects to Azure DevOps and discovers all project files across repositories
+- **Local File Scanning** — scans local files and folders with `--paths`, no Azure DevOps required
 - **NuGet Resolution** — resolves package metadata from multiple feeds with PAT authentication
 - **Vulnerability Scanning** — checks packages against NuGet feed advisories and the OSV.dev database with local caching
 - **Central Package Management** — automatic CPM detection, updates, and migration (`--migrate-to-cpm`)
-- **Automated Updates** — creates feature branches and pull requests for outdated packages
+- **Automated Updates** — creates feature branches and pull requests for outdated packages, or updates local files directly
 - **Package Sync** — force a specific package to an exact version across all repositories
 - **Version Warnings** — configurable warnings for version differences with actionable recommendations
 - **Health Indicators** — flags deprecated, outdated, and vulnerable packages
@@ -39,13 +40,23 @@ nugroom --config settings.json --dry-run --update-scope Minor
 
 # Apply updates (creates branches and PRs)
 nugroom --config settings.json --update-references --update-scope Patch
+
+# Scan local files (no Azure DevOps needed)
+nugroom --paths ./src --paths MyApp.csproj
+
+# Dry-run local updates
+nugroom --paths ./src --dry-run --update-scope Minor
+
+# Apply local updates directly to files on disk
+nugroom --paths ./src --update-references --update-scope Patch
 ```
 
 ### Prerequisites
 
 - .NET 10.0 or later
-- Azure DevOps Personal Access Token with Code (Read) permissions
-- For automatic updates: PAT with **Code (Read & Write)** and **Pull Request Threads (Read & Write)** permissions
+- For Azure DevOps mode: Personal Access Token with Code (Read) permissions
+- For automatic updates via PRs: PAT with **Code (Read & Write)** and **Pull Request Threads (Read & Write)** permissions
+- For local mode (`--paths`): no Azure DevOps credentials required
 
 ---
 

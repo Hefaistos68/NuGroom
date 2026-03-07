@@ -13,6 +13,27 @@ namespace NuGroom.Tests
 		private static readonly string[] MinimalValidArgs =
 			["--organization", "https://dev.azure.com/org", "--token", "my-pat"];
 
+		private string _tempDir = string.Empty;
+		private string _tempFile = string.Empty;
+
+		[SetUp]
+		public void SetUp()
+		{
+			_tempDir = Path.Combine(Path.GetTempPath(), $"NuGroomCmdTests_{Guid.NewGuid()}");
+			Directory.CreateDirectory(_tempDir);
+			_tempFile = Path.Combine(_tempDir, "test-file.txt");
+			File.WriteAllText(_tempFile, "dummy");
+		}
+
+		[TearDown]
+		public void TearDown()
+		{
+			if (Directory.Exists(_tempDir))
+			{
+				Directory.Delete(_tempDir, recursive: true);
+			}
+		}
+
 		// ── Help & empty args ──────────────────────────────────────────
 
 		[Test]
@@ -77,7 +98,13 @@ namespace NuGroom.Tests
 			result.ResolveNuGet.ShouldBeTrue();
 			result.ShowDetailedInfo.ShouldBeFalse();
 			result.IgnoreRenovate.ShouldBeFalse();
-			result.Feeds.ShouldBeEmpty();
+			
+			// Default feed should be added
+			result.Feeds.ShouldNotBeEmpty();
+			result.Feeds.Count.ShouldBe(1);
+			result.Feeds[0].Name.ShouldBe("NuGet.org");
+			result.Feeds[0].Url.ShouldBe("https://api.nuget.org/v3/index.json");
+
 			result.ExportPackagesPath.ShouldBeNull();
 			result.FeedAuth.ShouldBeEmpty();
 			result.VersionWarningConfig.ShouldBeNull();
@@ -1489,6 +1516,91 @@ namespace NuGroom.Tests
 			result.Config.ShouldNotBeNull();
 			result.MigrateToCpm.ShouldBeTrue();
 			result.PerProject.ShouldBeTrue();
+		}
+
+		// ── Local mode (--paths) ────────────────────────────────────────
+
+		[Test]
+		public void WhenPathsProvidedWithoutOrgTokenThenConfigIsNullAndLocalPathsIsPopulated()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldNotBeNull();
+			result.LocalPaths!.ShouldContain(_tempDir);
+		}
+
+		[Test]
+		public void WhenMultiplePathsProvidedThenAllPathsAreCollected()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--paths", _tempFile]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldNotBeNull();
+			result.LocalPaths!.Count.ShouldBe(2);
+			result.LocalPaths.ShouldContain(_tempDir);
+			result.LocalPaths.ShouldContain(_tempFile);
+		}
+
+		[Test]
+		public void WhenPathsProvidedThenNoOrgOrTokenRequired()
+		{
+			// Should not print error and LocalPaths should be set
+			var result = CommandLineParser.Parse(["--paths", _tempDir]);
+
+			result.LocalPaths.ShouldNotBeNull();
+			result.LocalPaths!.ShouldContain(_tempDir);
+		}
+
+		[Test]
+		public void WhenNoArgsAndNoPathsThenLocalPathsIsNull()
+		{
+			var result = CommandLineParser.Parse(MinimalValidArgs);
+
+			result.LocalPaths.ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenPathsWithUpdateReferencesThenUpdateConfigIsRequested()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--update-references"]);
+
+			result.LocalPaths.ShouldNotBeNull();
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig!.IsRequested.ShouldBeTrue();
+			result.UpdateConfig.DryRun.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenPathsWithDryRunThenUpdateConfigIsDryRun()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--dry-run"]);
+
+			result.LocalPaths.ShouldNotBeNull();
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig!.IsRequested.ShouldBeTrue();
+			result.UpdateConfig.DryRun.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenPathsWithUpdateReferencesAndDryRunThenDryRunWins()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--update-references", "--dry-run"]);
+
+			result.LocalPaths.ShouldNotBeNull();
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig!.IsRequested.ShouldBeTrue();
+			result.UpdateConfig.DryRun.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenPathsWithUpdateScopeThenScopeIsSet()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--dry-run", "--update-scope", "Minor"]);
+
+			result.LocalPaths.ShouldNotBeNull();
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig!.Scope.ShouldBe(UpdateScope.Minor);
 		}
 	}
 }

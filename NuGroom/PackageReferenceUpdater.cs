@@ -470,7 +470,8 @@ namespace NuGroom
 		/// </summary>
 		/// <param name="plans">The update plans to display.</param>
 		/// <param name="updateConfig">Update configuration with scope, branch naming, and dry-run settings.</param>
-		public static void PrintUpdateSummary(List<RepositoryUpdatePlan> plans, UpdateConfig updateConfig)
+		/// <param name="isLocalMode">When <c>true</c>, suppresses branch/PR language and shows local-file update messages instead.</param>
+		public static void PrintUpdateSummary(List<RepositoryUpdatePlan> plans, UpdateConfig updateConfig, bool isLocalMode = false)
 		{
 			var w = ConsoleWriter.Out;
 
@@ -495,7 +496,7 @@ namespace NuGroom
 			w.WriteLine(new string('=', 80))
 			 .WriteLine($"Update scope: {updateConfig.Scope}");
 
-			if (updateConfig.DryRun)
+			if (updateConfig.DryRun && !isLocalMode)
 			{
 				PrintDryRunDetails(w, updateConfig);
 			}
@@ -506,17 +507,29 @@ namespace NuGroom
 
 			foreach (var plan in plans)
 			{
-				totalUpdates += PrintRepositoryPlan(w, plan, updateConfig);
+				totalUpdates += PrintRepositoryPlan(w, plan, updateConfig, isLocalMode);
 			}
 
-			w.WriteLine($"Total: {totalUpdates} update(s) across {plans.Count} repository(ies)");
+			var locationLabel = isLocalMode ? "path(s)" : "repository(ies)";
+
+			w.WriteLine($"Total: {totalUpdates} update(s) across {plans.Count} {locationLabel}");
 
 			if (updateConfig.DryRun)
 			{
-				w.Yellow()
-				 .WriteLine($"Would create {plans.Count} feature branch(es) and {plans.Count} pull request(s).")
-				 .WriteLine("Run with --update-references (without --dry-run) to apply changes.")
-				 .ResetColor();
+				if (isLocalMode)
+				{
+					w.Yellow()
+					 .WriteLine($"Would update {totalUpdates} package reference(s) in {plans.SelectMany(p => p.FileUpdates).Count()} file(s).")
+					 .WriteLine("Run with --update-references (without --dry-run) to apply changes.")
+					 .ResetColor();
+				}
+				else
+				{
+					w.Yellow()
+					 .WriteLine($"Would create {plans.Count} feature branch(es) and {plans.Count} pull request(s).")
+					 .WriteLine("Run with --update-references (without --dry-run) to apply changes.")
+					 .ResetColor();
+				}
 			}
 		}
 
@@ -543,14 +556,19 @@ namespace NuGroom
 		}
 
 		/// <summary>
-		/// Prints the file updates and optional dry-run branch/PR info for a single repository.
+		/// Prints the file updates and optional dry-run branch/PR info for a single repository or local path group.
 		/// </summary>
+		/// <param name="w">Console writer.</param>
+		/// <param name="plan">The repository/path update plan.</param>
+		/// <param name="updateConfig">Update configuration.</param>
+		/// <param name="isLocalMode">When <c>true</c>, shows local-file dry-run messages instead of branch/PR info.</param>
 		/// <returns>The number of package updates printed.</returns>
-		private static int PrintRepositoryPlan(ConsoleWriter w, RepositoryUpdatePlan plan, UpdateConfig updateConfig)
+		private static int PrintRepositoryPlan(ConsoleWriter w, RepositoryUpdatePlan plan, UpdateConfig updateConfig, bool isLocalMode = false)
 		{
 			var updateCount = 0;
+			var headerLabel = isLocalMode ? "Path" : "Repository";
 
-			w.WriteLine($"Repository: {plan.RepositoryName}")
+			w.WriteLine($"{headerLabel}: {plan.RepositoryName}")
 			 .WriteLine(new string('-', 50));
 
 			foreach (var file in plan.FileUpdates)
@@ -559,7 +577,7 @@ namespace NuGroom
 
 				foreach (var update in file.Updates)
 				{
-					w.WriteLineColored(ConsoleColor.Cyan, $"    {update.PackageName}: {update.OldVersion} → {update.NewVersion}");
+					w.WriteLineColored(ConsoleColor.Cyan, $"    {update.PackageName}: {update.OldVersion} -> {update.NewVersion}");
 					updateCount++;
 				}
 			}
@@ -567,15 +585,25 @@ namespace NuGroom
 			if (updateConfig.DryRun)
 			{
 				var repoUpdates = plan.FileUpdates.Sum(f => f.Updates.Count);
-				var branchName = $"{updateConfig.FeatureBranchName}-{{timestamp}}";
-				var commitMsg = $"chore: update {repoUpdates} NuGet package reference(s) ({updateConfig.Scope} scope)";
 
-				var sourceDryRun = updateConfig.SourceBranchPattern ?? "default branch";
+				if (isLocalMode)
+				{
+					w.DarkYellow()
+					 .WriteLine($"  [Would update] {repoUpdates} package reference(s) in {plan.FileUpdates.Count} file(s)")
+					 .ResetColor();
+				}
+				else
+				{
+					var branchName = $"{updateConfig.FeatureBranchName}-{{timestamp}}";
+					var commitMsg = $"chore: update {repoUpdates} NuGet package reference(s) ({updateConfig.Scope} scope)";
 
-				w.DarkYellow()
-				 .WriteLine($"  [Would create] Branch: {branchName} from {sourceDryRun}")
-				 .WriteLine($"  [Would create] PR: \"{commitMsg}\" → {updateConfig.TargetBranchPattern}")
-				 .ResetColor();
+					var sourceDryRun = updateConfig.SourceBranchPattern ?? "default branch";
+
+					w.DarkYellow()
+					 .WriteLine($"  [Would create] Branch: {branchName} from {sourceDryRun}")
+					 .WriteLine($"  [Would create] PR: \"{commitMsg}\" -> {updateConfig.TargetBranchPattern}")
+					 .ResetColor();
+				}
 			}
 
 			w.WriteLine();

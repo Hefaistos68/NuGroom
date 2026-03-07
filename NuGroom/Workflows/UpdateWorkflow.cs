@@ -339,7 +339,7 @@ namespace NuGroom.Workflows
 		/// <summary>
 		/// Dispatches to the correct apply method based on the file update's <see cref="PackageSourceKind"/>.
 		/// </summary>
-		private static string ApplyUpdatesBySourceKind(string content, FileUpdate fileUpdate)
+		internal static string ApplyUpdatesBySourceKind(string content, FileUpdate fileUpdate)
 		{
 			return fileUpdate.SourceKind switch
 			{
