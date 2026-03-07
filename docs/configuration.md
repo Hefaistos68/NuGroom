@@ -64,6 +64,7 @@ NuGroom supports a JSON configuration file for all settings. Use `--config setti
   "ExportWarnings": "warnings.json",
   "ExportRecommendations": "recommendations.json",
   "ExportSbom": "sbom.spdx.json",
+  "ExportVulnerabilities": "vulnerabilities.json",
   "ExportFormat": "Json",
   "Update": {
     "Scope": "Patch",
@@ -94,6 +95,13 @@ NuGroom supports a JSON configuration file for all settings. Use `--config setti
       "IncrementFileVersion": true,
       "Scope": "Patch"
     }
+  },
+  "Vulnerability": {
+    "OsvEnabled": true,
+    "OsvBaseUrl": "https://api.osv.dev/v1/",
+    "CacheEnabled": true,
+    "CacheTtlHours": 24,
+    "CachePath": ".nugroom/vuln-cache.json"
   }
 }
 ```
@@ -129,8 +137,10 @@ NuGroom supports a JSON configuration file for all settings. Use `--config setti
 | `ExportRecommendations` | string | Standalone recommendations export path | No |
 | `ExportFormat` | string | Format for all exports: `Json` or `Csv` | No (default: `Json`) |
 | `ExportSbom` | string | SPDX 3.0.0 SBOM export path (always JSON-LD) | No |
+| `ExportVulnerabilities` | string | Standalone vulnerability report export path | No |
 | `IgnoreRenovate` | bool | Skip reading `renovate.json` from repositories | No (default: false) |
 | `IncludePackagesConfig` | bool | Also scan legacy `packages.config` files | No (default: false) |
+| `Vulnerability` | VulnerabilityConfig | Vulnerability database configuration | No (OSV enabled by default) |
 
 ---
 
@@ -361,4 +371,18 @@ This approach keeps secrets out of source control and works naturally with Azure
 
 ---
 
-> **See also:** [CLI Reference](cli-reference.md) · [Features](features.md) · [Automated Updates](automated-updates.md)
+## Vulnerability Configuration
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `OsvEnabled` | bool | Query the OSV.dev database for known vulnerabilities | `true` |
+| `OsvBaseUrl` | string | Base URL for the OSV API | `https://api.osv.dev/v1/` |
+| `CacheEnabled` | bool | Cache vulnerability query results to disk | `true` |
+| `CacheTtlHours` | int | Time-to-live for cached entries in hours (minimum 1) | `24` |
+| `CachePath` | string | File path for the vulnerability cache | `.nugroom/vuln-cache.json` |
+
+See [Vulnerability Scanning](vulnerability.md) for details on data sources, caching, and console output.
+
+---
+
+> **See also:** [CLI Reference](cli-reference.md) · [Features](features.md) · [Automated Updates](automated-updates.md) · [Vulnerability Scanning](vulnerability.md)

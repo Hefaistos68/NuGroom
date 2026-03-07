@@ -24,9 +24,11 @@ namespace NuGroom
 		VersionWarningConfig? VersionWarningConfig,
 		UpdateConfig? UpdateConfig,
 		List<SyncConfig> SyncConfigs,
+		string? ExportVulnerabilitiesPath = null,
 		bool IncludePackagesConfig = false,
 		bool MigrateToCpm = false,
-		bool PerProject = false);
+		bool PerProject = false,
+		VulnerabilityConfig? VulnerabilityConfig = null);
 
 	/// <summary>
 	/// Parses and validates command line arguments and optional configuration files
@@ -51,6 +53,7 @@ namespace NuGroom
 			public string? ExportWarningsPath { get; set; }
 			public string? ExportRecommendationsPath { get; set; }
 			public string? ExportSbomPath { get; set; }
+			public string? ExportVulnerabilitiesPath { get; set; }
 			public ExportFormat? ExportFormat { get; set; }
 			public string? ConfigPath { get; set; }
 			public List<FeedAuth> FeedAuth { get; } = new();
@@ -82,6 +85,7 @@ namespace NuGroom
 			public bool VersionIncrementExplicit { get; set; }
 			public bool MigrateToCpm { get; set; }
 			public bool PerProject { get; set; }
+			public VulnerabilityConfig? VulnerabilityConfig { get; set; }
 		}
 
 		private static UpdateConfig EnsureUpdateConfig(CliParsingState state, bool markRequested = false)
@@ -521,6 +525,29 @@ namespace NuGroom
 					case "--per-project":
 						state.PerProject = true;
 						break;
+					case "--skip-vuln":
+						state.VulnerabilityConfig ??= new VulnerabilityConfig();
+						state.VulnerabilityConfig.OsvEnabled = false;
+						break;
+					case "--vuln-cache-path":
+						if (i + 1 < args.Length)
+						{
+							state.VulnerabilityConfig ??= new VulnerabilityConfig();
+							state.VulnerabilityConfig.CachePath = args[++i];
+						}
+
+						break;
+					case "--no-vuln-cache":
+						state.VulnerabilityConfig ??= new VulnerabilityConfig();
+						state.VulnerabilityConfig.CacheEnabled = false;
+						break;
+					case "--export-vulnerabilities":
+						if (i + 1 < args.Length)
+						{
+							state.ExportVulnerabilitiesPath = args[++i];
+						}
+
+						break;
 					default:
 						Console.WriteLine($"Error: Unknown argument '{args[i]}'");
 						ShowHelp();
@@ -822,6 +849,45 @@ namespace NuGroom
 			{
 				state.IncludeRepositories.AddRange(fileConfig.IncludeRepositories);
 			}
+
+			if (state.VulnerabilityConfig == null && fileConfig.Vulnerability != null)
+			{
+				state.VulnerabilityConfig = fileConfig.Vulnerability;
+			}
+			else if (state.VulnerabilityConfig != null && fileConfig.Vulnerability != null)
+			{
+				// CLI set specific overrides (e.g. --skip-vuln); merge remaining fields from file
+				var defaultVulnerabilityConfig = new VulnerabilityConfig();
+
+				if (state.VulnerabilityConfig.CachePath == defaultVulnerabilityConfig.CachePath
+					&& fileConfig.Vulnerability.CachePath != defaultVulnerabilityConfig.CachePath)
+				{
+					state.VulnerabilityConfig.CachePath = fileConfig.Vulnerability.CachePath;
+				}
+
+				if (state.VulnerabilityConfig.OsvBaseUrl == defaultVulnerabilityConfig.OsvBaseUrl
+					&& fileConfig.Vulnerability.OsvBaseUrl != defaultVulnerabilityConfig.OsvBaseUrl)
+				{
+					state.VulnerabilityConfig.OsvBaseUrl = fileConfig.Vulnerability.OsvBaseUrl;
+				}
+
+				if (state.VulnerabilityConfig.CacheTtlHours == defaultVulnerabilityConfig.CacheTtlHours
+					&& fileConfig.Vulnerability.CacheTtlHours != defaultVulnerabilityConfig.CacheTtlHours)
+				{
+					state.VulnerabilityConfig.CacheTtlHours = fileConfig.Vulnerability.CacheTtlHours;
+				}
+
+				if (state.VulnerabilityConfig.CacheEnabled == defaultVulnerabilityConfig.CacheEnabled
+					&& fileConfig.Vulnerability.CacheEnabled != defaultVulnerabilityConfig.CacheEnabled)
+				{
+					state.VulnerabilityConfig.CacheEnabled = fileConfig.Vulnerability.CacheEnabled;
+				}
+			}
+
+			if (state.ExportVulnerabilitiesPath == null && fileConfig.ExportVulnerabilities != null)
+			{
+				state.ExportVulnerabilitiesPath = fileConfig.ExportVulnerabilities;
+			}
 		}
 
 		/// <summary>
@@ -949,9 +1015,11 @@ namespace NuGroom
 				VersionWarningConfig: state.VersionWarningConfig,
 				UpdateConfig: state.UpdateConfig,
 				SyncConfigs: state.SyncConfigs,
+				ExportVulnerabilitiesPath: state.ExportVulnerabilitiesPath,
 				IncludePackagesConfig: state.IncludePackagesConfig ?? false,
 				MigrateToCpm: state.MigrateToCpm,
-				PerProject: state.PerProject);
+				PerProject: state.PerProject,
+				VulnerabilityConfig: state.VulnerabilityConfig);
 		}
 
 		/// <summary>
@@ -1027,6 +1095,12 @@ namespace NuGroom
 			Console.WriteLine("  --migrate-to-cpm             Migrate projects to use Central Package Management (Directory.Packages.props)");
 			Console.WriteLine("  --per-project                Create a Directory.Packages.props per project instead of per repository");
 			Console.WriteLine("                               (only valid with --migrate-to-cpm)");
+			Console.WriteLine();
+			Console.WriteLine("Vulnerability Scanning Options:");
+			Console.WriteLine("  --skip-vuln                  Disable OSV.dev vulnerability database queries");
+			Console.WriteLine("  --no-vuln-cache              Disable local vulnerability cache");
+			Console.WriteLine("  --vuln-cache-path <path>     Path for the vulnerability cache file (default: .nugroom/vuln-cache.json)");
+			Console.WriteLine("  --export-vulnerabilities <path> Export vulnerability report to a separate file (format via --export-format)");
 			Console.WriteLine();
 			Console.WriteLine("For detailed help, see README.md");
 		}
