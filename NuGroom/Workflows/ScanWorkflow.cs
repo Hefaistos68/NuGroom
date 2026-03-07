@@ -470,7 +470,10 @@ namespace NuGroom.Workflows
 
 			if (aggregator != null)
 			{
-				await aggregator.EnrichPackageInfosAsync(nugetInfos, tempReferences);
+				using (aggregator)
+				{
+					await aggregator.EnrichPackageInfosAsync(nugetInfos, tempReferences);
+				}
 			}
 
 			var result = new List<PackageReferenceExtractor.PackageReference>();
