@@ -857,16 +857,30 @@ namespace NuGroom
 			else if (state.VulnerabilityConfig != null && fileConfig.Vulnerability != null)
 			{
 				// CLI set specific overrides (e.g. --skip-vuln); merge remaining fields from file
-				if (state.VulnerabilityConfig.CachePath == new VulnerabilityConfig().CachePath
-					&& fileConfig.Vulnerability.CachePath != new VulnerabilityConfig().CachePath)
+				var defaultVulnerabilityConfig = new VulnerabilityConfig();
+
+				if (state.VulnerabilityConfig.CachePath == defaultVulnerabilityConfig.CachePath
+					&& fileConfig.Vulnerability.CachePath != defaultVulnerabilityConfig.CachePath)
 				{
 					state.VulnerabilityConfig.CachePath = fileConfig.Vulnerability.CachePath;
 				}
 
-				if (state.VulnerabilityConfig.OsvBaseUrl == new VulnerabilityConfig().OsvBaseUrl
-					&& fileConfig.Vulnerability.OsvBaseUrl != new VulnerabilityConfig().OsvBaseUrl)
+				if (state.VulnerabilityConfig.OsvBaseUrl == defaultVulnerabilityConfig.OsvBaseUrl
+					&& fileConfig.Vulnerability.OsvBaseUrl != defaultVulnerabilityConfig.OsvBaseUrl)
 				{
 					state.VulnerabilityConfig.OsvBaseUrl = fileConfig.Vulnerability.OsvBaseUrl;
+				}
+
+				if (state.VulnerabilityConfig.CacheTtlHours == defaultVulnerabilityConfig.CacheTtlHours
+					&& fileConfig.Vulnerability.CacheTtlHours != defaultVulnerabilityConfig.CacheTtlHours)
+				{
+					state.VulnerabilityConfig.CacheTtlHours = fileConfig.Vulnerability.CacheTtlHours;
+				}
+
+				if (state.VulnerabilityConfig.CacheEnabled == defaultVulnerabilityConfig.CacheEnabled
+					&& fileConfig.Vulnerability.CacheEnabled != defaultVulnerabilityConfig.CacheEnabled)
+				{
+					state.VulnerabilityConfig.CacheEnabled = fileConfig.Vulnerability.CacheEnabled;
 				}
 			}
 
