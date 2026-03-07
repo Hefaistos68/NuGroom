@@ -259,7 +259,7 @@ namespace NuGroom.Reporting
 
 				foreach (var rec in group.OrderBy(r => r.Repository).ThenBy(r => r.ProjectPath))
 				{
-					w.WriteColored(ConsoleColor.White, "  • ")
+					w.WriteColored(ConsoleColor.White, "  ï¿½ ")
 					 .WriteLine($"{rec.Repository}/{Path.GetFileName(rec.ProjectPath)}")
 					 .Gray().Write("    Current: ")
 					 .Yellow().Write(rec.CurrentVersion)
@@ -390,6 +390,15 @@ namespace NuGroom.Reporting
 			string? Version);
 
 		/// <summary>
+		/// DTO used to serialize the top-level vulnerability JSON report.
+		/// </summary>
+		private record VulnerabilityReportDto(
+			DateTime GeneratedUtc,
+			int TotalVulnerabilities,
+			int PackagesAffected,
+			List<VulnerabilityReportEntry> Packages);
+
+		/// <summary>
 		/// Exports a standalone vulnerability report as JSON, listing every vulnerable package
 		/// with its advisory details grouped by package name.
 		/// </summary>
@@ -400,16 +409,15 @@ namespace NuGroom.Reporting
 			var options = new JsonSerializerOptions
 			{
 				WriteIndented = true,
-				DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+				DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+				PropertyNamingPolicy = JsonNamingPolicy.CamelCase
 			};
 
-			var dto = new
-			{
-				generatedUtc = DateTime.UtcNow,
-				totalVulnerabilities = entries.Sum(e => e.Advisories.Count),
-				packagesAffected = entries.Count,
-				packages = entries
-			};
+			var dto = new VulnerabilityReportDto(
+				GeneratedUtc: DateTime.UtcNow,
+				TotalVulnerabilities: entries.Sum(e => e.Advisories.Count),
+				PackagesAffected: entries.Count,
+				Packages: entries);
 
 			var json = JsonSerializer.Serialize(dto, options);
 			File.WriteAllText(path, json, Encoding.UTF8);
