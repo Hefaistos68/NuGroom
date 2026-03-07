@@ -470,7 +470,10 @@ namespace NuGroom.Workflows
 
 			if (aggregator != null)
 			{
-				await aggregator.EnrichPackageInfosAsync(nugetInfos, tempReferences);
+				using (aggregator)
+				{
+					await aggregator.EnrichPackageInfosAsync(nugetInfos, tempReferences);
+				}
 			}
 
 			var result = new List<PackageReferenceExtractor.PackageReference>();
@@ -502,14 +505,31 @@ namespace NuGroom.Workflows
 
 			if (config.OsvEnabled)
 			{
-				var httpClient = new HttpClient();
+				HttpClient? httpClient = null;
 
-				if (!string.IsNullOrWhiteSpace(config.OsvBaseUrl))
+				if (string.IsNullOrWhiteSpace(config.OsvBaseUrl))
 				{
-					httpClient.BaseAddress = new Uri(config.OsvBaseUrl);
+					httpClient = new HttpClient();
+				}
+				else
+				{
+					if (Uri.TryCreate(config.OsvBaseUrl, UriKind.Absolute, out var baseUri))
+					{
+						httpClient = new HttpClient
+						{
+							BaseAddress = baseUri
+						};
+					}
+					else
+					{
+						Console.Error.WriteLine($"[Warning] OSV is enabled but OsvBaseUrl '{config.OsvBaseUrl}' is not a valid absolute URI. OSV will be disabled for this run.");
+					}
 				}
 
-				sources.Add(new OsvVulnerabilitySource(httpClient));
+				if (httpClient != null)
+				{
+					sources.Add(new OsvVulnerabilitySource(httpClient));
+				}
 			}
 
 			if (sources.Count == 0)
