@@ -291,6 +291,12 @@ namespace NuGroom.Configuration
 		/// Configuration for vulnerability database lookups (OSV.dev, caching).
 		/// </summary>
 		public VulnerabilityConfig? Vulnerability { get; set; }
+
+		/// <summary>
+		/// Local file system paths (files or directories) to scan instead of connecting to Azure DevOps.
+		/// When set, <see cref="Organization"/> and <see cref="Token"/> are not required.
+		/// </summary>
+		public List<string>? Paths { get; set; }
 	}
 
 	/// <summary>

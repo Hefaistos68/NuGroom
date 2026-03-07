@@ -4,7 +4,27 @@ Complete list of all command line options for NuGroom.
 
 ---
 
-## Required Options
+## Modes of Operation
+
+NuGroom supports two modes:
+
+- **Azure DevOps mode** (default) — connects to an Azure DevOps organization to discover and scan repositories. Requires `--organization` and `--token`.
+- **Local mode** — scans files and folders on disk. No Azure DevOps credentials or connectivity needed. Use `--paths` to specify one or more paths.
+
+---
+
+## Local Mode
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--paths <path>` | Scan a local file or directory (repeatable, no Azure DevOps required) | `--paths ./src --paths MyApp.csproj` |
+
+When `--paths` is specified, `--organization` and `--token` are **not** required.
+All other options (feeds, exclusions, exports, NuGet resolution) work the same as in Azure DevOps mode.
+
+---
+
+## Required Options (Azure DevOps mode)
 
 | Option | Short | Description |
 |--------|-------|-------------|

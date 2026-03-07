@@ -6,7 +6,7 @@ namespace NuGroom
 {
 	/// <summary>
 	/// Represents the result of parsing command line arguments.
-	/// A null <see cref="Config"/> indicates a parse error or help request.
+	/// A null <see cref="Config"/> indicates a parse error, help request, or local-mode scan (when <see cref="LocalPaths"/> is populated).
 	/// </summary>
 	public sealed record ParseResult(
 		AzureDevOpsConfig? Config,
@@ -28,7 +28,8 @@ namespace NuGroom
 		bool IncludePackagesConfig = false,
 		bool MigrateToCpm = false,
 		bool PerProject = false,
-		VulnerabilityConfig? VulnerabilityConfig = null);
+		VulnerabilityConfig? VulnerabilityConfig = null,
+		List<string>? LocalPaths = null);
 
 	/// <summary>
 	/// Parses and validates command line arguments and optional configuration files
@@ -86,6 +87,7 @@ namespace NuGroom
 			public bool MigrateToCpm { get; set; }
 			public bool PerProject { get; set; }
 			public VulnerabilityConfig? VulnerabilityConfig { get; set; }
+			public List<string> LocalPaths { get; } = new();
 		}
 
 		private static UpdateConfig EnsureUpdateConfig(CliParsingState state, bool markRequested = false)
@@ -271,6 +273,13 @@ namespace NuGroom
 						if (i + 1 < args.Length)
 						{
 							state.ExcludePatterns.Add(args[++i]);
+						}
+
+						break;
+					case "--paths":
+						if (i + 1 < args.Length)
+						{
+							state.LocalPaths.Add(args[++i]);
 						}
 
 						break;
@@ -896,6 +905,18 @@ namespace NuGroom
 			{
 				state.ExportVulnerabilitiesPath = fileConfig.ExportVulnerabilities;
 			}
+
+			// Merge local paths from config file (additive)
+			if (fileConfig.Paths?.Any() == true)
+			{
+				foreach (var path in fileConfig.Paths)
+				{
+					if (!state.LocalPaths.Contains(path, StringComparer.OrdinalIgnoreCase))
+					{
+						state.LocalPaths.Add(path);
+					}
+				}
+			}
 		}
 
 		/// <summary>
@@ -932,20 +953,24 @@ namespace NuGroom
 		/// </summary>
 		private static ParseResult? ValidateRequiredParameters(CliParsingState state, PackageReferenceExtractor.ExclusionList exclusionList)
 		{
-			if (string.IsNullOrWhiteSpace(state.Organization))
+			// In local mode, ADO credentials are not required
+			if (state.LocalPaths.Count == 0)
 			{
-				Console.WriteLine("Error: --organization is required (missing in CLI/config)");
-				ShowHelp();
+				if (string.IsNullOrWhiteSpace(state.Organization))
+				{
+					Console.WriteLine("Error: --organization is required (missing in CLI/config)");
+					ShowHelp();
 
-				return CreateErrorParseResult(state, exclusionList);
-			}
+					return CreateErrorParseResult(state, exclusionList);
+				}
 
-			if (string.IsNullOrWhiteSpace(state.Token))
-			{
-				Console.WriteLine("Error: --token is required (missing in CLI/config)");
-				ShowHelp();
+				if (string.IsNullOrWhiteSpace(state.Token))
+				{
+					Console.WriteLine("Error: --token is required (missing in CLI/config)");
+					ShowHelp();
 
-				return CreateErrorParseResult(state, exclusionList);
+					return CreateErrorParseResult(state, exclusionList);
+				}
 			}
 
 			if (state.PerProject && !state.MigrateToCpm)
@@ -988,18 +1013,23 @@ namespace NuGroom
 		/// </summary>
 		private static ParseResult BuildSuccessfulParseResult(CliParsingState state, PackageReferenceExtractor.ExclusionList exclusionList)
 		{
-			var azConfig = new AzureDevOpsConfig
+			AzureDevOpsConfig? azConfig = null;
+
+			if (state.LocalPaths.Count == 0)
 			{
-				OrganizationUrl = state.Organization!,
-				PersonalAccessToken = state.Token!,
-				ProjectName = state.Project,
-				MaxRepositories = state.MaxRepos,
-				IncludeArchivedRepositories = state.IncludeArchived ?? false,
-				ExcludeProjectPatterns = state.ExcludeProjectPatterns,
-				CaseSensitiveProjectFilters = state.CaseSensitiveProjectFilters ?? false,
-				ExcludeRepositories = state.ExcludeRepositories,
-				IncludeRepositories = state.IncludeRepositories
-			};
+				azConfig = new AzureDevOpsConfig
+				{
+					OrganizationUrl = state.Organization!,
+					PersonalAccessToken = state.Token!,
+					ProjectName = state.Project,
+					MaxRepositories = state.MaxRepos,
+					IncludeArchivedRepositories = state.IncludeArchived ?? false,
+					ExcludeProjectPatterns = state.ExcludeProjectPatterns,
+					CaseSensitiveProjectFilters = state.CaseSensitiveProjectFilters ?? false,
+					ExcludeRepositories = state.ExcludeRepositories,
+					IncludeRepositories = state.IncludeRepositories
+				};
+			}
 
 			// Wire CLI version increment config into UpdateConfig if set explicitly
 			if (state.VersionIncrement != null && state.UpdateConfig != null)
@@ -1027,7 +1057,8 @@ namespace NuGroom
 				IncludePackagesConfig: state.IncludePackagesConfig ?? false,
 				MigrateToCpm: state.MigrateToCpm,
 				PerProject: state.PerProject,
-				VulnerabilityConfig: state.VulnerabilityConfig);
+				VulnerabilityConfig: state.VulnerabilityConfig,
+				LocalPaths: state.LocalPaths.Count > 0 ? state.LocalPaths : null);
 		}
 
 		/// <summary>
@@ -1042,9 +1073,11 @@ namespace NuGroom
 			Console.WriteLine("Usage:");
 			Console.WriteLine("  NuGroom --config settings.json");
 			Console.WriteLine("  NuGroom -o https://dev.azure.com/org -t token --feed https://feed/index.json --feed-auth \"FeedName||pat\"");
+			Console.WriteLine("  NuGroom --paths ./src --paths MyApp.csproj");
 			Console.WriteLine();
 			Console.WriteLine("Options:");
 			Console.WriteLine("  --config <path>              Load configuration from JSON file");
+			Console.WriteLine("  --paths <path>              Scan local file or folder (repeatable, no Azure DevOps required)");
 			Console.WriteLine("  -o, --organization <url>     Azure DevOps organization URL");
 			Console.WriteLine("  -t, --token <pat>            Personal Access Token");
 			Console.WriteLine("  -p, --project <name>         Project name (optional, scans all projects if not specified)");

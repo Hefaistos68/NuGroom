@@ -9,7 +9,7 @@ namespace NuGroom
 	{
 		/// <summary>
 		/// Parses command line arguments and dispatches to the appropriate workflow:
-		/// sync, scan + report, or scan + report + update.
+		/// sync, local scan, scan + report, or scan + report + update.
 		/// </summary>
 		/// <param name="args">Command line arguments.</param>
 		/// <returns>Zero on success, non-zero on error.</returns>
@@ -18,6 +18,12 @@ namespace NuGroom
 			try
 			{
 				var parseResult = CommandLineParser.Parse(args);
+
+				// Local mode: Config is null but LocalPaths is populated — no ADO credentials needed
+				if (parseResult.LocalPaths is { Count: > 0 })
+				{
+					return await RunLocalScanPipelineAsync(parseResult);
+				}
 
 				if (parseResult.Config == null)
 				{
@@ -59,6 +65,23 @@ namespace NuGroom
 		}
 
 		/// <summary>
+		/// Executes the scan → report pipeline for local files and directories (no Azure DevOps connection).
+		/// </summary>
+		private static async Task<int> RunLocalScanPipelineAsync(ParseResult parseResult)
+		{
+			var scanResult = await LocalScanWorkflow.ExecuteAsync(parseResult);
+
+			var references = scanResult.References;
+
+			if (references != null && references.Any())
+			{
+				ReportWorkflow.Execute(references, parseResult);
+			}
+
+			return 0;
+		}
+
+		/// <summary>
 		/// Executes the full scan → report → update pipeline
 		/// </summary>
 		private static async Task<int> RunScanReportUpdatePipelineAsync(ParseResult parseResult)
@@ -94,3 +117,4 @@ namespace NuGroom
 		}
 	}
 }
+

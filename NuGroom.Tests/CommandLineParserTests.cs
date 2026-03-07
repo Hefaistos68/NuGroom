@@ -1490,5 +1490,47 @@ namespace NuGroom.Tests
 			result.MigrateToCpm.ShouldBeTrue();
 			result.PerProject.ShouldBeTrue();
 		}
+
+		// ── Local mode (--paths) ────────────────────────────────────────
+
+		[Test]
+		public void WhenPathsProvidedWithoutOrgTokenThenConfigIsNullAndLocalPathsIsPopulated()
+		{
+			var result = CommandLineParser.Parse(["--paths", "./src"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldNotBeNull();
+			result.LocalPaths!.ShouldContain("./src");
+		}
+
+		[Test]
+		public void WhenMultiplePathsProvidedThenAllPathsAreCollected()
+		{
+			var result = CommandLineParser.Parse(["--paths", "./src", "--paths", "MyApp.csproj"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldNotBeNull();
+			result.LocalPaths!.Count.ShouldBe(2);
+			result.LocalPaths.ShouldContain("./src");
+			result.LocalPaths.ShouldContain("MyApp.csproj");
+		}
+
+		[Test]
+		public void WhenPathsProvidedThenNoOrgOrTokenRequired()
+		{
+			// Should not print error and LocalPaths should be set
+			var result = CommandLineParser.Parse(["--paths", "/some/path"]);
+
+			result.LocalPaths.ShouldNotBeNull();
+			result.LocalPaths!.ShouldContain("/some/path");
+		}
+
+		[Test]
+		public void WhenNoArgsAndNoPathsThenLocalPathsIsNull()
+		{
+			var result = CommandLineParser.Parse(MinimalValidArgs);
+
+			result.LocalPaths.ShouldBeNull();
+		}
 	}
 }
