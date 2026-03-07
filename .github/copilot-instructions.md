@@ -3,6 +3,47 @@ applyTo: '**'
 description: 'Prevent Copilot from wreaking havoc across your codebase, keeping it under control.'
 ---
 
+## Project Overview
+
+**NuGroom** is a .NET 10 command-line tool (packaged as a global dotnet tool via `dotnet tool install --global NuGroom`) that connects to **Azure DevOps**, discovers C#/VB.NET/F# project files across repositories, and provides comprehensive NuGet package management including vulnerability scanning, automated updates, Central Package Management (CPM) migration, and SBOM export.
+
+### Solution Structure
+
+| Project | Description |
+|---------|-------------|
+| `NuGroom/` | Main console application and library (`net10.0`) |
+| `NuGroom.Tests/` | NUnit unit tests (`net10.0`) |
+| `NuGroom.Vsix/` | Visual Studio extension wrapper (`net48`) |
+
+Key subdirectories of `NuGroom/`:
+- `ADO/` — Azure DevOps client and API wrappers
+- `Configuration/` — Config file loading and validation
+- `Nuget/` — NuGet feed resolution and metadata
+- `Vulnerability/` — NuGet advisory and OSV.dev scanning
+- `Workflows/` — High-level operation workflows (scan, update, migrate, local scan)
+- `Reporting/` — Export (JSON, CSV, SPDX SBOM)
+
+### Build and Test
+
+```bash
+# Build the whole solution
+dotnet build NuGroom.slnx
+
+# Run tests (always build first)
+dotnet build NuGroom.slnx
+dotnet test NuGroom.Tests/NuGroom.Tests.csproj --no-build
+```
+
+### Key Conventions
+
+- **Logger**: Use `Logger.Info()`, `Logger.Warning()`, `Logger.Error()`, `Logger.Debug()` (defined in `NuGroom/ErrorHandling.cs`).
+- **CLI parsing**: New CLI options require changes in `CommandLineParser.cs` — add to `ParseResult`, `CliParsingState`, the switch case in `ParseCommandLineArguments`, `BuildSuccessfulParseResult`, and `ShowHelp`.
+- **Parameter validation**: Use `ArgumentNullException.ThrowIfNull` for null checks on method parameters.
+- **File paths**: ADO `GitItem.Path` and CPM paths use a leading `/` (e.g., `/Directory.Packages.props`).
+- **Tool packaging**: The tool command name is `nugroom`; configured via `<PackAsTool>true</PackAsTool>` in `NuGroom.csproj`.
+
+---
+
 ## Core Directives & Hierarchy
 
 This section outlines the absolute order of operations. These rules have the highest priority and must not be violated.
