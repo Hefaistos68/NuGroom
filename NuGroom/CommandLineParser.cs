@@ -909,9 +909,11 @@ namespace NuGroom
 			// Merge local paths from config file (additive)
 			if (fileConfig.Paths?.Any() == true)
 			{
+				var existing = new HashSet<string>(state.LocalPaths, StringComparer.OrdinalIgnoreCase);
+
 				foreach (var path in fileConfig.Paths)
 				{
-					if (!state.LocalPaths.Contains(path, StringComparer.OrdinalIgnoreCase))
+					if (existing.Add(path))
 					{
 						state.LocalPaths.Add(path);
 					}

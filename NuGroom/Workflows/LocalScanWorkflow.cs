@@ -36,7 +36,7 @@ namespace NuGroom.Workflows
 			ConsoleWriter.Out.WriteLine("Local scan mode — no Azure DevOps connection required.");
 			ConsoleWriter.Out.WriteLine($"Scanning {localPaths.Count} path(s)...").WriteLine();
 
-			var excludeProjectRegexes = BuildProjectExclusionRegexes(parseResult.ExclusionList);
+			var excludeProjectRegexes = BuildProjectExclusionRegexes();
 
 			var projectFiles = DiscoverProjectFiles(localPaths, excludeProjectRegexes, parseResult.IncludePackagesConfig);
 			var allFiles = projectFiles.ProjectFiles;
@@ -115,9 +115,10 @@ namespace NuGroom.Workflows
 		}
 
 		/// <summary>
-		/// Builds a list of precompiled exclusion regexes for project file paths from the exclusion list.
+		/// Builds a list of precompiled exclusion regexes for project file paths.
+		/// Currently returns an empty list; project-file exclusion patterns are not supported in local mode.
 		/// </summary>
-		private static List<Regex> BuildProjectExclusionRegexes(PackageReferenceExtractor.ExclusionList exclusionList)
+		private static List<Regex> BuildProjectExclusionRegexes()
 		{
 			return new List<Regex>();
 		}
