@@ -65,7 +65,7 @@ namespace NuGroom
 		}
 
 		/// <summary>
-		/// Executes the scan → report pipeline for local files and directories (no Azure DevOps connection).
+		/// Executes the scan → report → update pipeline for local files and directories (no Azure DevOps connection).
 		/// </summary>
 		private static async Task<int> RunLocalScanPipelineAsync(ParseResult parseResult)
 		{
@@ -76,6 +76,11 @@ namespace NuGroom
 			if (references != null && references.Any())
 			{
 				ReportWorkflow.Execute(references, parseResult);
+
+				if (parseResult.UpdateConfig != null)
+				{
+					LocalUpdateWorkflow.Execute(references, parseResult.UpdateConfig);
+				}
 			}
 
 			return 0;

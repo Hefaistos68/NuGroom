@@ -974,6 +974,29 @@ namespace NuGroom
 					return CreateErrorParseResult(state, exclusionList);
 				}
 			}
+			else
+			{
+				// Validate local paths
+				foreach (var path in state.LocalPaths)
+				{
+					try
+					{
+						var expanded = Environment.ExpandEnvironmentVariables(path);
+						var fullPath = Path.GetFullPath(expanded);
+
+						if (!Directory.Exists(fullPath) && !File.Exists(fullPath))
+						{
+							Console.WriteLine($"Error: Path not found: '{path}' (expanded: '{fullPath}')");
+							return CreateErrorParseResult(state, exclusionList);
+						}
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine($"Error: Invalid path '{path}': {ex.Message}");
+						return CreateErrorParseResult(state, exclusionList);
+					}
+				}
+			}
 
 			if (state.PerProject && !state.MigrateToCpm)
 			{
@@ -1037,6 +1060,12 @@ namespace NuGroom
 			if (state.VersionIncrement != null && state.UpdateConfig != null)
 			{
 				state.UpdateConfig.VersionIncrement = state.VersionIncrement;
+			}
+
+			// Add default nuget.org feed if no feeds are specified and resolution is enabled (or default)
+			if (state.Feeds.Count == 0 && (state.ResolveNuGet ?? true))
+			{
+				state.Feeds.Add(new Feed("NuGet.org", "https://api.nuget.org/v3/index.json"));
 			}
 
 			return new ParseResult(
@@ -1110,8 +1139,8 @@ namespace NuGroom
 			Console.WriteLine("  --case-sensitive-project     Use case-sensitive project file matching");
 			Console.WriteLine();
 			Console.WriteLine("Update Options:");
-			Console.WriteLine("  --update-references          Enable auto-update mode (creates branches and PRs)");
-			Console.WriteLine("  --dry-run                    Show planned updates without creating branches/PRs");
+			Console.WriteLine("  --update-references          Enable auto-update mode (creates PRs in repo mode, writes files in local mode)");
+			Console.WriteLine("  --dry-run                    Show planned updates without making any changes");
 			Console.WriteLine("  --update-scope <scope>       Version update scope: Patch, Minor, or Major (default: Patch)");
 			Console.WriteLine("  --source-branch <pattern>    Source branch pattern to branch from (default: same as target-branch)");
 			Console.WriteLine("  --target-branch <pattern>    Target branch pattern for PRs (default: develop/*)");

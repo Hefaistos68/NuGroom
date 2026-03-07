@@ -22,6 +22,10 @@ NuGroom supports two modes:
 When `--paths` is specified, `--organization` and `--token` are **not** required.
 All other options (feeds, exclusions, exports, NuGet resolution) work the same as in Azure DevOps mode.
 
+`--update-references` and `--dry-run` are supported in local mode. Instead of creating branches and PRs,
+updates are written directly to the project files on disk. In dry-run mode, the planned updates are
+displayed without modifying any files.
+
 ---
 
 ## Required Options (Azure DevOps mode)
@@ -111,8 +115,8 @@ All other options (feeds, exclusions, exports, NuGet resolution) work the same a
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--update-references` | Enable auto-update mode (creates branches and PRs) | |
-| `--dry-run` | Show planned updates without creating branches/PRs | |
+| `--update-references` | Enable auto-update mode (creates branches and PRs in repo mode, writes files directly in local mode) | |
+| `--dry-run` | Show planned updates without making any changes | |
 | `--update-scope <scope>` | Version update scope: `Patch`, `Minor`, or `Major` | `Patch` |
 | `--source-branch <pattern>` | Source branch pattern to branch from | default branch |
 | `--target-branch <pattern>` | Target branch pattern for PR destination | `develop/*` |

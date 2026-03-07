@@ -33,7 +33,7 @@ namespace NuGroom.Workflows
 			var extractor = new PackageReferenceExtractor(exclusionList);
 			var nugetResolver = parseResult.ResolveNuGet ? new NuGetPackageResolver(parseResult.Feeds, parseResult.FeedAuth) : null;
 
-			ConsoleWriter.Out.WriteLine("Local scan mode — no Azure DevOps connection required.");
+			ConsoleWriter.Out.WriteLine("Local scan mode");
 			ConsoleWriter.Out.WriteLine($"Scanning {localPaths.Count} path(s)...").WriteLine();
 
 			var excludeProjectRegexes = BuildProjectExclusionRegexes();
