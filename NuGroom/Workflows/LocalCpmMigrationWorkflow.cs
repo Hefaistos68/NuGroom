@@ -1,3 +1,4 @@
+using NuGroom.Configuration;
 using NuGroom.Nuget;
 
 namespace NuGroom.Workflows
@@ -24,7 +25,9 @@ namespace NuGroom.Workflows
 				return;
 			}
 
-			var isDryRun = parseResult.UpdateConfig?.DryRun ?? true;
+			var effectiveUpdateConfig = UpdateConfig.GetEffective(parseResult.UpdateConfig);
+
+			var isDryRun = effectiveUpdateConfig.DryRun;
 			var eligibleReferences = references
 				.Where(r => r.SourceKind == PackageSourceKind.ProjectFile)
 				.Where(r => !string.IsNullOrWhiteSpace(r.Version))

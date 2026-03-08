@@ -34,14 +34,14 @@ namespace NuGroom.Tests
 			File.WriteAllText(projectPath, """
 				<Project Sdk="Microsoft.NET.Sdk">
 				  <ItemGroup>
-				    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+					<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 				  </ItemGroup>
 				</Project>
 				""");
 
 			var parseResult = BuildParseResult(
 				paths: [_tempDir],
-				updateConfig: new UpdateConfig { DryRun = false },
+				updateConfig: null,
 				migrateToCpm: true,
 				perProject: false);
 			var references = new List<PackageReferenceExtractor.PackageReference>
@@ -58,6 +58,39 @@ namespace NuGroom.Tests
 			LocalCpmMigrationWorkflow.Execute(parseResult, references);
 
 			File.Exists(Path.Combine(_tempDir, "Directory.Packages.props")).ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenLocalCpmMigrationWithDryRunThenPropsFileIsNotGenerated()
+		{
+			var projectPath = Path.Combine(_tempDir, "MyApp.csproj");
+			File.WriteAllText(projectPath, """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+					<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+				  </ItemGroup>
+				</Project>
+				""");
+
+			var parseResult = BuildParseResult(
+				paths: [_tempDir],
+				updateConfig: new UpdateConfig { DryRun = true },
+				migrateToCpm: true,
+				perProject: false);
+			var references = new List<PackageReferenceExtractor.PackageReference>
+			{
+				new(
+					PackageName: "Newtonsoft.Json",
+					Version: "13.0.3",
+					ProjectPath: projectPath,
+					RepositoryName: Path.GetFileName(_tempDir),
+					ProjectName: "local",
+					LineNumber: 1)
+			};
+
+			LocalCpmMigrationWorkflow.Execute(parseResult, references);
+
+			File.Exists(Path.Combine(_tempDir, "Directory.Packages.props")).ShouldBeFalse();
 		}
 
 		private static ParseResult BuildParseResult(

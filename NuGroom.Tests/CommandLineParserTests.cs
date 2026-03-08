@@ -322,6 +322,17 @@ namespace NuGroom.Tests
 		}
 
 		[Test]
+		public void WhenIncludeProjectThenConfigContainsPattern()
+		{
+			var args = MinimalValidArgs.Concat(["--include-project", @".*\.Web\.csproj"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldNotBeNull();
+			result.Config.IncludeProjectPatterns.ShouldContain(@".*\.Web\.csproj");
+		}
+
+		[Test]
 		public void WhenExcludeRepoThenConfigContainsPattern()
 		{
 			var args = MinimalValidArgs.Concat(["--exclude-repo", "Legacy-.*"]).ToArray();
@@ -1666,6 +1677,33 @@ namespace NuGroom.Tests
 
 			result.IncludeProjectPatterns.ShouldNotBeNull();
 			result.IncludeProjectPatterns!.Count.ShouldBe(2);
+		}
+
+		[Test]
+		public void WhenPathsWithSyncAndMigrateToCpmThenReturnsError()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--sync", "Newtonsoft.Json", "13.0.3", "--migrate-to-cpm"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenPathsWithSyncAndUpdateReferencesThenReturnsError()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--sync", "Newtonsoft.Json", "13.0.3", "--update-references"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenPathsWithMigrateToCpmAndUpdateReferencesThenReturnsError()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--migrate-to-cpm", "--update-references"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldBeNull();
 		}
 	}
 }

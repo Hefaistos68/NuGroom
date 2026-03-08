@@ -47,6 +47,7 @@ namespace NuGroom.Configuration
 			ExcludePatterns = new List<string>();
 			FeedAuth = new List<FeedAuth>();
 			ExcludeCsprojPatterns = new List<string>();
+			IncludeCsprojPatterns = new List<string>();
 			ExcludeRepositories = new List<string>();
 			IncludeRepositories = new List<string>();
 		}
@@ -113,6 +114,9 @@ namespace NuGroom.Configuration
 
 		/// <summary>.csproj-specific exclusion patterns.</summary>
 		public List<string> ExcludeCsprojPatterns { get; }
+
+		/// <summary>.csproj-specific inclusion patterns.</summary>
+		public List<string> IncludeCsprojPatterns { get; }
 
 		/// <summary>Repository exclusion regex patterns.</summary>
 		public List<string> ExcludeRepositories { get; }
@@ -209,6 +213,11 @@ namespace NuGroom.Configuration
 		/// Glob or pattern list applied specifically to .csproj file names for exclusion.
 		/// </summary>
 		public List<string>? ExcludeProjectPatterns { get; set; }
+
+		/// <summary>
+		/// Regex patterns to include project files. When specified, only matching project files are scanned.
+		/// </summary>
+		public List<string>? IncludeProjectPatterns { get; set; }
 
 		/// <summary>
 		/// Regex patterns to exclude repositories by name.
@@ -490,6 +499,17 @@ namespace NuGroom.Configuration
 					if (!context.ExcludeCsprojPatterns.Contains(pattern))
 					{
 						context.ExcludeCsprojPatterns.Add(pattern);
+					}
+				}
+			}
+
+			if (config.IncludeProjectPatterns?.Any() == true)
+			{
+				foreach (var pattern in config.IncludeProjectPatterns)
+				{
+					if (!context.IncludeCsprojPatterns.Contains(pattern))
+					{
+						context.IncludeCsprojPatterns.Add(pattern);
 					}
 				}
 			}

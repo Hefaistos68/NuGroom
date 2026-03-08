@@ -29,7 +29,7 @@ namespace NuGroom.Workflows
 			List<FeedAuth> feedAuth,
 			bool ignoreRenovate)
 		{
-			var effectiveUpdateConfig = updateConfig ?? new UpdateConfig();
+			var effectiveUpdateConfig = updateConfig ?? new UpdateConfig { DryRun = false };
 			effectiveUpdateConfig.ValidateReviewers();
 
 			// Resolve target version from feeds if not explicitly provided

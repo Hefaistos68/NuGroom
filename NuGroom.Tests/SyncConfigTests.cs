@@ -54,6 +54,35 @@ namespace NuGroom.Tests
 		}
 
 		[Test]
+		public void WhenCreateApplyChangesDefaultThenDryRunIsFalse()
+		{
+			var config = UpdateConfig.CreateApplyChangesDefault();
+
+			config.DryRun.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenGetEffectiveWithNullThenReturnsApplyChangesDefault()
+		{
+			var config = UpdateConfig.GetEffective(null);
+
+			config.DryRun.ShouldBeFalse();
+		}
+
+		[Test]
+		public void WhenGetEffectiveWithConfigThenReturnsSameInstance()
+		{
+			var config = new UpdateConfig
+			{
+				DryRun = true
+			};
+
+			var effective = UpdateConfig.GetEffective(config);
+
+			effective.ShouldBeSameAs(config);
+		}
+
+		[Test]
 		public void WhenDefaultsThenSourceBranchPatternIsNull()
 		{
 			var config = new UpdateConfig();

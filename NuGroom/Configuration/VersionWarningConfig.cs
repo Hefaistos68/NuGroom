@@ -135,6 +135,30 @@ namespace NuGroom.Configuration
 	public class UpdateConfig
 	{
 		/// <summary>
+		/// Creates the default update configuration for explicit action workflows that should apply changes
+		/// unless <c>--dry-run</c> was explicitly requested.
+		/// </summary>
+		/// <returns>A new <see cref="UpdateConfig"/> with dry-run disabled.</returns>
+		public static UpdateConfig CreateApplyChangesDefault()
+		{
+			return new UpdateConfig
+			{
+				DryRun = false
+			};
+		}
+
+		/// <summary>
+		/// Returns the provided update configuration when present, otherwise creates the default
+		/// apply-changes configuration for explicit action workflows.
+		/// </summary>
+		/// <param name="updateConfig">The update configuration provided by the caller.</param>
+		/// <returns>The existing configuration, or a new apply-changes default.</returns>
+		public static UpdateConfig GetEffective(UpdateConfig? updateConfig)
+		{
+			return updateConfig ?? CreateApplyChangesDefault();
+		}
+
+		/// <summary>
 		/// Indicates whether updates were explicitly requested (e.g. via CLI flags such as --update-references or --dry-run).
 		/// Configuration alone should not trigger updates when this flag is false.
 		/// </summary>

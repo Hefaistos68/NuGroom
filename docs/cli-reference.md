@@ -152,8 +152,10 @@ Version properties that do not exist in a project file are left unchanged.
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--sync <package> [version]` | Sync a specific package to a version across all repositories (creates PRs) or local files (writes directly) | |
+| `--sync <package> [version]` | Sync a specific package to a version across all repositories (creates PRs) or local files (writes directly) | Applies changes |
 | | If version is omitted, the latest available version from feeds is used | |
+
+`--sync` **applies changes by default**. Use `--dry-run` to preview without modifying files or creating PRs.
 
 ---
 

@@ -34,7 +34,7 @@ namespace NuGroom.Tests
 			File.WriteAllText(projectPath, """
 				<Project Sdk="Microsoft.NET.Sdk">
 				  <ItemGroup>
-				    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+					<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
 				  </ItemGroup>
 				</Project>
 				""");
@@ -42,7 +42,7 @@ namespace NuGroom.Tests
 			var parseResult = BuildParseResult(
 				paths: [_tempDir],
 				syncConfigs: [new SyncConfig("Newtonsoft.Json", "13.0.3")],
-				updateConfig: new UpdateConfig { DryRun = false });
+				updateConfig: null);
 			var references = new List<PackageReferenceExtractor.PackageReference>
 			{
 				new(
@@ -58,6 +58,41 @@ namespace NuGroom.Tests
 
 			var updated = File.ReadAllText(projectPath);
 			updated.ShouldContain("13.0.3");
+		}
+
+		[Test]
+		public async Task WhenLocalSyncWithDryRunThenFileIsNotModified()
+		{
+			var projectPath = Path.Combine(_tempDir, "MyApp.csproj");
+			var originalContent = """
+				<Project Sdk="Microsoft.NET.Sdk">
+				  <ItemGroup>
+					<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+				  </ItemGroup>
+				</Project>
+				""";
+			File.WriteAllText(projectPath, originalContent);
+
+			var parseResult = BuildParseResult(
+				paths: [_tempDir],
+				syncConfigs: [new SyncConfig("Newtonsoft.Json", "13.0.3")],
+				updateConfig: new UpdateConfig { DryRun = true });
+			var references = new List<PackageReferenceExtractor.PackageReference>
+			{
+				new(
+					PackageName: "Newtonsoft.Json",
+					Version: "13.0.1",
+					ProjectPath: projectPath,
+					RepositoryName: Path.GetFileName(_tempDir),
+					ProjectName: "local",
+					LineNumber: 1)
+			};
+
+			await LocalSyncWorkflow.ExecuteAsync(parseResult, references);
+
+			var content = File.ReadAllText(projectPath);
+			content.ShouldContain("13.0.1");
+			content.ShouldNotContain("13.0.3");
 		}
 
 		private static ParseResult BuildParseResult(

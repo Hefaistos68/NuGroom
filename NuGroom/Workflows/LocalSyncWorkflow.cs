@@ -25,7 +25,7 @@ namespace NuGroom.Workflows
 				return;
 			}
 
-			var effectiveUpdateConfig = parseResult.UpdateConfig ?? new UpdateConfig();
+			var effectiveUpdateConfig = UpdateConfig.GetEffective(parseResult.UpdateConfig);
 			var resolver = new NuGetPackageResolver(parseResult.Feeds, parseResult.FeedAuth);
 
 			foreach (var syncConfig in parseResult.SyncConfigs)
@@ -55,6 +55,14 @@ namespace NuGroom.Workflows
 			}
 		}
 
+		/// <summary>
+		/// Groups matching package references by file and source kind, producing one
+		/// <see cref="FileUpdate"/> per file that needs to be rewritten.
+		/// </summary>
+		/// <param name="references">All scanned package references.</param>
+		/// <param name="packageName">The package name to sync.</param>
+		/// <param name="targetVersion">The version to sync to.</param>
+		/// <returns>A list of file updates describing the required changes.</returns>
 		private static List<FileUpdate> BuildFileUpdates(
 			List<PackageReferenceExtractor.PackageReference> references,
 			string packageName,
@@ -91,6 +99,13 @@ namespace NuGroom.Workflows
 			return fileUpdates;
 		}
 
+		/// <summary>
+		/// Returns the target version for a sync operation. Uses the explicitly specified version
+		/// when available, otherwise resolves the latest version from configured feeds.
+		/// </summary>
+		/// <param name="syncConfig">Sync configuration containing the package name and optional target version.</param>
+		/// <param name="resolver">NuGet resolver used to look up the latest version.</param>
+		/// <returns>The resolved target version, or <c>null</c> if resolution failed.</returns>
 		private static async Task<string?> ResolveTargetVersionAsync(SyncConfig syncConfig, NuGetPackageResolver resolver)
 		{
 			if (!string.IsNullOrWhiteSpace(syncConfig.TargetVersion))
@@ -115,6 +130,12 @@ namespace NuGroom.Workflows
 			return packageInfo.LatestVersion;
 		}
 
+		/// <summary>
+		/// Prints a dry-run summary of the planned sync changes without modifying any files.
+		/// </summary>
+		/// <param name="packageName">The package being synced.</param>
+		/// <param name="targetVersion">The target version.</param>
+		/// <param name="fileUpdates">The file updates that would be applied.</param>
 		private static void PrintDryRun(string packageName, string targetVersion, List<FileUpdate> fileUpdates)
 		{
 			ConsoleWriter.Out
@@ -132,6 +153,13 @@ namespace NuGroom.Workflows
 			}
 		}
 
+		/// <summary>
+		/// Applies the sync changes by reading, rewriting, and saving each affected file.
+		/// Individual file failures are logged and do not abort the remaining updates.
+		/// </summary>
+		/// <param name="fileUpdates">The file updates to apply.</param>
+		/// <param name="packageName">The package being synced.</param>
+		/// <param name="targetVersion">The target version.</param>
 		private static void ApplyLocalSync(List<FileUpdate> fileUpdates, string packageName, string targetVersion)
 		{
 			ConsoleWriter.Out
@@ -144,31 +172,40 @@ namespace NuGroom.Workflows
 
 			foreach (var fileUpdate in fileUpdates)
 			{
-				var filePath = fileUpdate.ProjectPath;
-
-				if (!File.Exists(filePath))
+				try
 				{
-					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: File not found: {filePath}").ResetColor();
-					continue;
+					var filePath = fileUpdate.ProjectPath;
+
+					if (!File.Exists(filePath))
+					{
+						ConsoleWriter.Out.Yellow().WriteLine($"  Warning: File not found: {filePath}").ResetColor();
+						continue;
+					}
+
+					var content = File.ReadAllText(filePath);
+
+					if (string.IsNullOrWhiteSpace(content))
+					{
+						continue;
+					}
+
+					var updatedContent = UpdateWorkflow.ApplyUpdatesBySourceKind(content, fileUpdate);
+
+					if (updatedContent == content)
+					{
+						continue;
+					}
+
+					File.WriteAllText(filePath, updatedContent);
+					updatedFiles++;
+					ConsoleWriter.Out.Green().WriteLine($"  Updated: {filePath}").ResetColor();
 				}
-
-				var content = File.ReadAllText(filePath);
-
-				if (string.IsNullOrWhiteSpace(content))
+				catch (Exception ex)
 				{
-					continue;
+					ConsoleWriter.Out.Red()
+						.WriteLine($"  Error updating {fileUpdate.ProjectPath}: {ex.Message}")
+						.ResetColor();
 				}
-
-				var updatedContent = UpdateWorkflow.ApplyUpdatesBySourceKind(content, fileUpdate);
-
-				if (updatedContent == content)
-				{
-					continue;
-				}
-
-				File.WriteAllText(filePath, updatedContent);
-				updatedFiles++;
-				ConsoleWriter.Out.Green().WriteLine($"  Updated: {filePath}").ResetColor();
 			}
 
 			ConsoleWriter.Out.WriteLine($"Local sync complete: {updatedFiles} file(s) updated.");

@@ -23,7 +23,7 @@ namespace NuGroom.Workflows
 		/// </param>
 		/// <param name="updateConfig">
 		/// Optional update configuration for branching, dry-run, and PR settings.
-		/// When <c>null</c>, defaults to dry-run mode.
+		/// When <c>null</c>, changes are applied. Use <c>--dry-run</c> to preview.
 		/// </param>
 		public static async Task ExecuteAsync(
 			AzureDevOpsConfig config,
@@ -34,7 +34,9 @@ namespace NuGroom.Workflows
 			ArgumentNullException.ThrowIfNull(config);
 			ArgumentNullException.ThrowIfNull(references);
 
-			var isDryRun = updateConfig?.DryRun ?? true;
+			var effectiveUpdateConfig = UpdateConfig.GetEffective(updateConfig);
+
+			var isDryRun = effectiveUpdateConfig.DryRun;
 
 			// Filter to only references with explicit versions from project files
 			var eligibleRefs = references
