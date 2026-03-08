@@ -75,45 +75,47 @@ namespace NuGroom.Workflows
 
 			foreach (var repository in repositories)
 			{
-				// Resolve source branch
-				(string RefName, string ObjectId)? sourceBranch;
-
-				if (effectiveUpdateConfig.SourceBranchPattern != null)
+				try
 				{
-					sourceBranch = await client.FindLatestBranchAsync(repository, effectiveUpdateConfig.SourceBranchPattern);
-				}
-				else
-				{
-					sourceBranch = await client.GetDefaultBranchAsync(repository);
-				}
+					// Resolve source branch
+					(string RefName, string ObjectId)? sourceBranch;
 
-				if (sourceBranch == null)
-				{
-					continue;
-				}
-
-				// Get project files
-				var projectFiles = await client.GetProjectFilesAsync(repository);
-
-				if (projectFiles.Count == 0)
-				{
-					continue;
-				}
-
-				// Check Renovate overrides — skip if this package is excluded
-				RenovateOverrides? repoRenovate = null;
-
-				if (!ignoreRenovate)
-				{
-					try
+					if (effectiveUpdateConfig.SourceBranchPattern != null)
 					{
-						repoRenovate = await RenovateConfigReader.TryReadFromRepositoryAsync(client, repository);
+						sourceBranch = await client.FindLatestBranchAsync(repository, effectiveUpdateConfig.SourceBranchPattern);
 					}
-					catch (Exception ex)
+					else
 					{
-						Logger.Debug($"Failed to read Renovate config for {repository.Name}: {ex.Message}");
+						sourceBranch = await client.GetDefaultBranchAsync(repository);
 					}
-				}
+
+					if (sourceBranch == null)
+					{
+						continue;
+					}
+
+					// Get project files
+					var projectFiles = await client.GetProjectFilesAsync(repository);
+
+					if (projectFiles.Count == 0)
+					{
+						continue;
+					}
+
+					// Check Renovate overrides — skip if this package is excluded
+					RenovateOverrides? repoRenovate = null;
+
+					if (!ignoreRenovate)
+					{
+						try
+						{
+							repoRenovate = await RenovateConfigReader.TryReadFromRepositoryAsync(client, repository);
+						}
+						catch (Exception ex)
+						{
+							Logger.Debug($"Failed to read Renovate config for {repository.Name}: {ex.Message}");
+						}
+					}
 
 					if (repoRenovate != null && RenovateConfigReader.IsPackageExcluded(syncConfig.PackageName, repoRenovate))
 					{
@@ -126,84 +128,89 @@ namespace NuGroom.Workflows
 
 					foreach (var projectFile in projectFiles)
 					{
-						var content = await client.GetFileContentFromBranchAsync(
-							repository, projectFile.Path, sourceBranch.Value.RefName);
-
-						if (string.IsNullOrWhiteSpace(content))
+						try
 						{
-							continue;
+							var content = await client.GetFileContentFromBranchAsync(
+								repository, projectFile.Path, sourceBranch.Value.RefName);
+
+							if (string.IsNullOrWhiteSpace(content))
+							{
+								continue;
+							}
+
+							// Extract references to find the current version of the target package
+							var refs = extractor.ExtractPackageReferences(content, repository.Name, projectFile.Path);
+							var match = refs.FirstOrDefault(r =>
+								r.PackageName.Equals(syncConfig.PackageName, StringComparison.OrdinalIgnoreCase));
+
+							if (match == null || string.IsNullOrEmpty(match.Version))
+							{
+								continue;
+							}
+
+							if (match.Version.Equals(targetVersion, StringComparison.OrdinalIgnoreCase))
+							{
+								continue;
+							}
+
+							// Apply the update (works for both upgrade and downgrade)
+							var updateList = new List<PackageUpdate>
+							{
+								new(syncConfig.PackageName, match.Version, targetVersion)
+							};
+
+							var updatedContent = PackageReferenceUpdater.ApplyUpdates(content, updateList);
+
+							if (updatedContent != content)
+							{
+								fileChanges[projectFile.Path] = updatedContent;
+								updates.Add((projectFile.Path, match.Version));
+							}
 						}
-
-						// Extract references to find the current version of the target package
-						var refs = extractor.ExtractPackageReferences(content, repository.Name, projectFile.Path);
-						var match = refs.FirstOrDefault(r =>
-							r.PackageName.Equals(syncConfig.PackageName, StringComparison.OrdinalIgnoreCase));
-
-						if (match == null || string.IsNullOrEmpty(match.Version))
+						catch (Exception ex)
 						{
-							continue;
-						}
-
-						if (match.Version.Equals(targetVersion, StringComparison.OrdinalIgnoreCase))
-						{
-							continue;
-						}
-
-						// Apply the update (works for both upgrade and downgrade)
-						var updateList = new List<PackageUpdate>
-						{
-							new(syncConfig.PackageName, match.Version, targetVersion)
-						};
-
-						var updatedContent = PackageReferenceUpdater.ApplyUpdates(content, updateList);
-
-						if (updatedContent != content)
-						{
-							fileChanges[projectFile.Path] = updatedContent;
-							updates.Add((projectFile.Path, match.Version));
+							ConsoleWriter.Out.Yellow().WriteLine($"  {repository.Name}: Warning: Failed to process {projectFile.Path}: {ex.Message}").ResetColor();
 						}
 					}
 
-				if (fileChanges.Count == 0)
-				{
-					unchangedCount++;
-					continue;
-				}
-
-				// Dry-run check
-				if (effectiveUpdateConfig.DryRun)
-				{
-					var c = ConsoleWriter.Out
-						.WriteLine($"Repository: {repository.Name}")
-						.WriteLine(new string('-', 50));
-
-					foreach (var (projectPath, oldVersion) in updates)
+					if (fileChanges.Count == 0)
 					{
-						c.WriteLine($"  {projectPath}: {oldVersion} → {targetVersion}");
+						unchangedCount++;
+						continue;
 					}
 
-					c.WriteLine($"  [Would create] Branch + PR to sync {syncConfig.PackageName} to {targetVersion}")
-						.WriteLine();
-					syncedCount++;
-					continue;
-				}
+					// Dry-run check
+					if (effectiveUpdateConfig.DryRun)
+					{
+						var c = ConsoleWriter.Out
+							.WriteLine($"Repository: {repository.Name}")
+							.WriteLine(new string('-', 50));
 
-				// Resolve target branch
-				var targetBranch = await client.FindLatestBranchAsync(repository, effectiveUpdateConfig.TargetBranchPattern);
+						foreach (var (projectPath, oldVersion) in updates)
+						{
+							c.WriteLine($"  {projectPath}: {oldVersion} → {targetVersion}");
+						}
 
-				if (targetBranch == null)
-				{
-					ConsoleWriter.Out.Yellow().WriteLine($"  {repository.Name}: No target branch matching '{effectiveUpdateConfig.TargetBranchPattern}'. Skipping.").ResetColor();
-					skippedCount++;
-					continue;
-				}
+						c.WriteLine($"  [Would create] Branch + PR to sync {syncConfig.PackageName} to {targetVersion}")
+							.WriteLine();
+						syncedCount++;
+						continue;
+					}
 
-				// Create branch, push, and open PR
-				var featureBranch = $"feature/sync-{syncConfig.PackageName.ToLowerInvariant()}-{targetVersion}-{DateTime.UtcNow:yyyyMMdd-HHmmss}";
-				var commitMessage = $"chore: sync {syncConfig.PackageName} to {targetVersion}";
+					// Resolve target branch
+					var targetBranch = await client.FindLatestBranchAsync(repository, effectiveUpdateConfig.TargetBranchPattern);
 
-				try
-				{
+					if (targetBranch == null)
+					{
+						ConsoleWriter.Out.Yellow().WriteLine($"  {repository.Name}: No target branch matching '{effectiveUpdateConfig.TargetBranchPattern}'. Skipping.").ResetColor();
+						skippedCount++;
+						continue;
+					}
+
+					// Create branch, push, and open PR
+					var featureBranch = $"feature/sync-{syncConfig.PackageName.ToLowerInvariant()}-{targetVersion}-{DateTime.UtcNow:yyyyMMdd-HHmmss}";
+					var commitMessage = $"chore: sync {syncConfig.PackageName} to {targetVersion}";
+
 					var (branchRef, commitId) = await client.CreateBranchAndPushAsync(
 						repository, sourceBranch.Value.ObjectId, featureBranch, fileChanges, commitMessage);
 

@@ -220,16 +220,24 @@ namespace NuGroom.Workflows
 
 			foreach (var cpmFile in cpmFiles)
 			{
-				var content = await client.GetFileContentAsync(repository, cpmFile);
-
-				if (string.IsNullOrWhiteSpace(content))
+				try
 				{
-					continue;
+					var content = await client.GetFileContentAsync(repository, cpmFile);
+
+					if (string.IsNullOrWhiteSpace(content))
+					{
+						continue;
+					}
+
+					var result = CpmPackageExtractor.Parse(content);
+
+					results.Add(result with { FilePath = cpmFile.Path });
 				}
-
-				var result = CpmPackageExtractor.Parse(content);
-
-				results.Add(result with { FilePath = cpmFile.Path });
+				catch (Exception ex)
+				{
+					ConsoleWriter.Out.Yellow().WriteLine($"      Warning: Failed to process {cpmFile.Path}: {ex.Message}");
+					ConsoleWriter.Out.ResetColor();
+				}
 			}
 
 			var activeCpmCount = results.Count(r => r.ManagePackageVersionsCentrally);

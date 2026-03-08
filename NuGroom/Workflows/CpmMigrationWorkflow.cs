@@ -106,15 +106,22 @@ namespace NuGroom.Workflows
 
 			foreach (var projectFile in projectFiles)
 			{
-				var content = await client.GetFileContentFromBranchAsync(repository, projectFile.Path, sourceBranch.Value.RefName);
+				try
+				{
+					var content = await client.GetFileContentFromBranchAsync(repository, projectFile.Path, sourceBranch.Value.RefName);
 
-				if (!string.IsNullOrWhiteSpace(content))
-				{
-					projectContents[projectFile.Path] = content;
+					if (!string.IsNullOrWhiteSpace(content))
+					{
+						projectContents[projectFile.Path] = content;
+					}
+					else
+					{
+						ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Could not read {projectFile.Path}, skipping.").ResetColor();
+					}
 				}
-				else
+				catch (Exception ex)
 				{
-					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Could not read {projectFile.Path}, skipping.").ResetColor();
+					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Failed to read {projectFile.Path}: {ex.Message}").ResetColor();
 				}
 			}
 
@@ -329,13 +336,20 @@ namespace NuGroom.Workflows
 					continue;
 				}
 
-				var content = await client.GetFileContentFromBranchAsync(repository, propsFile.Path, branchRefName);
-
-				if (!string.IsNullOrWhiteSpace(content))
+				try
 				{
-					var key = propsFile.Path.TrimStart('/');
-					result[key] = content;
-					Logger.Info($"  Found existing {key}");
+					var content = await client.GetFileContentFromBranchAsync(repository, propsFile.Path, branchRefName);
+
+					if (!string.IsNullOrWhiteSpace(content))
+					{
+						var key = propsFile.Path.TrimStart('/');
+						result[key] = content;
+						Logger.Info($"  Found existing {key}");
+					}
+				}
+				catch (Exception ex)
+				{
+					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Failed to read {propsFile.Path}: {ex.Message}").ResetColor();
 				}
 			}
 

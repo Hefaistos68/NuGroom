@@ -42,7 +42,14 @@ namespace NuGroom.Workflows
 
 			foreach (var root in localRoots)
 			{
-				MigrateRoot(root, eligibleReferences, parseResult.PerProject, isDryRun);
+				try
+				{
+					MigrateRoot(root, eligibleReferences, parseResult.PerProject, isDryRun);
+				}
+				catch (Exception ex)
+				{
+					ConsoleWriter.Out.Red().WriteLine($"Error migrating root '{root}': {ex.Message}").ResetColor();
+				}
 			}
 		}
 
@@ -136,7 +143,14 @@ namespace NuGroom.Workflows
 
 				if (!projectContents.ContainsKey(relativeProjectPath) && File.Exists(reference.ProjectPath))
 				{
-					projectContents[relativeProjectPath] = File.ReadAllText(reference.ProjectPath);
+					try
+					{
+						projectContents[relativeProjectPath] = File.ReadAllText(reference.ProjectPath);
+					}
+					catch (Exception ex)
+					{
+						ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Failed to read {reference.ProjectPath}: {ex.Message}").ResetColor();
+					}
 				}
 			}
 
@@ -149,7 +163,14 @@ namespace NuGroom.Workflows
 
 					if (File.Exists(propsFullPath))
 					{
-						existingPropsContents[propsRelativePath] = File.ReadAllText(propsFullPath);
+						try
+						{
+							existingPropsContents[propsRelativePath] = File.ReadAllText(propsFullPath);
+						}
+						catch (Exception ex)
+						{
+							ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Failed to read {propsFullPath}: {ex.Message}").ResetColor();
+						}
 					}
 				}
 			}
@@ -159,7 +180,14 @@ namespace NuGroom.Workflows
 
 				if (File.Exists(rootPropsPath))
 				{
-					existingPropsContents["Directory.Packages.props"] = File.ReadAllText(rootPropsPath);
+					try
+					{
+						existingPropsContents["Directory.Packages.props"] = File.ReadAllText(rootPropsPath);
+					}
+					catch (Exception ex)
+					{
+						ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Failed to read {rootPropsPath}: {ex.Message}").ResetColor();
+					}
 				}
 			}
 
@@ -209,17 +237,24 @@ namespace NuGroom.Workflows
 		{
 			foreach (var fileChange in fileChanges)
 			{
-				var fullPath = Path.Combine(root, fileChange.FilePath.Replace('/', Path.DirectorySeparatorChar));
-				var directory = Path.GetDirectoryName(fullPath);
-
-				if (!string.IsNullOrWhiteSpace(directory))
+				try
 				{
-					Directory.CreateDirectory(directory);
-				}
+					var fullPath = Path.Combine(root, fileChange.FilePath.Replace('/', Path.DirectorySeparatorChar));
+					var directory = Path.GetDirectoryName(fullPath);
 
-				File.WriteAllText(fullPath, fileChange.Content);
-				var action = fileChange.IsNew ? "Created" : "Updated";
-				ConsoleWriter.Out.Green().WriteLine($"  {action}: {fullPath}").ResetColor();
+					if (!string.IsNullOrWhiteSpace(directory))
+					{
+						Directory.CreateDirectory(directory);
+					}
+
+					File.WriteAllText(fullPath, fileChange.Content);
+					var action = fileChange.IsNew ? "Created" : "Updated";
+					ConsoleWriter.Out.Green().WriteLine($"  {action}: {fullPath}").ResetColor();
+				}
+				catch (Exception ex)
+				{
+					ConsoleWriter.Out.Red().WriteLine($"  Error writing {fileChange.FilePath}: {ex.Message}").ResetColor();
+				}
 			}
 		}
 
