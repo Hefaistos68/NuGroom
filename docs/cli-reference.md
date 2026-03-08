@@ -22,9 +22,9 @@ NuGroom supports two modes:
 When `--paths` is specified, `--organization` and `--token` are **not** required.
 All other options (feeds, exclusions, exports, NuGet resolution) work the same as in Azure DevOps mode.
 
-`--update-references` and `--dry-run` are supported in local mode. Instead of creating branches and PRs,
-updates are written directly to the project files on disk. In dry-run mode, the planned updates are
-displayed without modifying any files.
+`--update-references`, `--dry-run`, `--sync`, and `--migrate-to-cpm` are supported in local mode.
+Instead of creating branches and PRs, changes are written directly to files on disk. In dry-run mode,
+planned changes are displayed without modifying files.
 
 ---
 
@@ -72,12 +72,15 @@ displayed without modifying any files.
 
 ---
 
-## Project File Exclusion Options
+## Project File Filtering Options
 
 | Option | Description | Example |
 |--------|-------------|---------|
-| `--exclude-project <pattern>` | Exclude project files matching regex pattern | `--exclude-project ".*\.Test[s]?\.csproj$"` |
+| `--exclude-project <pattern>` | Exclude project files matching regex pattern (repeatable) | `--exclude-project ".*\.Test[s]?\.csproj$"` |
+| `--include-project <pattern>` | Include only project files matching regex pattern (repeatable). When specified, only matching projects are scanned. | `--include-project ".*\.Web\.csproj$"` |
 | `--case-sensitive-project` | Use case-sensitive project file matching | |
+
+When both `--include-project` and `--exclude-project` are specified, exclusion takes precedence: a project must match at least one include pattern **and** must not match any exclude pattern.
 
 ---
 
@@ -149,7 +152,7 @@ Version properties that do not exist in a project file are left unchanged.
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--sync <package> [version]` | Sync a specific package to a version across all repositories (creates PRs) | |
+| `--sync <package> [version]` | Sync a specific package to a version across all repositories (creates PRs) or local files (writes directly) | |
 | | If version is omitted, the latest available version from feeds is used | |
 
 ---

@@ -12,7 +12,7 @@ A command-line tool that connects to Azure DevOps, searches all repositories for
 - **Vulnerability Scanning** — checks packages against NuGet feed advisories and the OSV.dev database with local caching
 - **Central Package Management** — automatic CPM detection, updates, and migration (`--migrate-to-cpm`)
 - **Automated Updates** — creates feature branches and pull requests for outdated packages, or updates local files directly
-- **Package Sync** — force a specific package to an exact version across all repositories
+- **Package Sync** — force a specific package to an exact version across repositories or local files
 - **Version Warnings** — configurable warnings for version differences with actionable recommendations
 - **Health Indicators** — flags deprecated, outdated, and vulnerable packages
 - **Internal Package Detection** — identifies internal packages and their likely source projects
@@ -49,6 +49,15 @@ nugroom --paths ./src --dry-run --update-scope Minor
 
 # Apply local updates directly to files on disk
 nugroom --paths ./src --update-references --update-scope Patch
+
+# Sync one package version across local files
+nugroom --paths ./src --sync Newtonsoft.Json 13.0.3
+
+# Migrate local projects to Central Package Management
+nugroom --paths ./src --migrate-to-cpm
+
+# Scan only web projects, excluding test projects
+nugroom --paths ./src --include-project ".*\.Web\.csproj$" --exclude-project ".*\.Tests\.csproj$"
 ```
 
 ### Prerequisites

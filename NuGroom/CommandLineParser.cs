@@ -29,7 +29,10 @@ namespace NuGroom
 		bool MigrateToCpm = false,
 		bool PerProject = false,
 		VulnerabilityConfig? VulnerabilityConfig = null,
-		List<string>? LocalPaths = null);
+		List<string>? LocalPaths = null,
+		List<string>? ExcludeProjectPatterns = null,
+		List<string>? IncludeProjectPatterns = null,
+		bool CaseSensitiveProjectFilters = false);
 
 	/// <summary>
 	/// Parses and validates command line arguments and optional configuration files
@@ -63,6 +66,7 @@ namespace NuGroom
 			public List<string> ExcludePackages { get; } = new();
 			public List<string> ExcludePatterns { get; } = new();
 			public List<string> ExcludeProjectPatterns { get; } = new();
+			public List<string> IncludeProjectPatterns { get; } = new();
 			public List<string> ExcludeRepositories { get; } = new();
 			public List<string> IncludeRepositories { get; } = new();
 			public bool? NoDefaultExclusions { get; set; }
@@ -287,6 +291,13 @@ namespace NuGroom
 						if (i + 1 < args.Length)
 						{
 							state.ExcludeProjectPatterns.Add(args[++i]);
+						}
+
+						break;
+					case "--include-project":
+						if (i + 1 < args.Length)
+						{
+							state.IncludeProjectPatterns.Add(args[++i]);
 						}
 
 						break;
@@ -1089,7 +1100,10 @@ namespace NuGroom
 				MigrateToCpm: state.MigrateToCpm,
 				PerProject: state.PerProject,
 				VulnerabilityConfig: state.VulnerabilityConfig,
-				LocalPaths: state.LocalPaths.Count > 0 ? state.LocalPaths : null);
+				LocalPaths: state.LocalPaths.Count > 0 ? state.LocalPaths : null,
+				ExcludeProjectPatterns: state.ExcludeProjectPatterns.Count > 0 ? state.ExcludeProjectPatterns : null,
+				IncludeProjectPatterns: state.IncludeProjectPatterns.Count > 0 ? state.IncludeProjectPatterns : null,
+				CaseSensitiveProjectFilters: state.CaseSensitiveProjectFilters ?? false);
 		}
 
 		/// <summary>
@@ -1132,6 +1146,7 @@ namespace NuGroom
 			Console.WriteLine("  --exclude-package <name>     Exclude specific package by exact name");
 			Console.WriteLine("  --exclude-pattern <regex>    Exclude packages matching regex pattern");
 			Console.WriteLine("  --exclude-project <pattern>  Exclude project files matching regex pattern (.csproj, .vbproj, .fsproj)");
+			Console.WriteLine("  --include-project <pattern>  Include only project files matching regex pattern (repeatable)");
 			Console.WriteLine("  --exclude-repo <pattern>     Exclude repositories matching regex pattern (e.g., \"Legacy-.*\")");
 			Console.WriteLine("  --include-repo <pattern>     Include only repositories matching regex pattern (repeatable, processed in order)");
 			Console.WriteLine("  --no-default-exclusions      Don't exclude Microsoft.* and System.* by default");
