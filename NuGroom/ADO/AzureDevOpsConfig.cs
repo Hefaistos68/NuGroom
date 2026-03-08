@@ -37,6 +37,12 @@ namespace NuGroom.ADO
 		public List<string> ExcludeProjectPatterns { get; set; } = new();
 
 		/// <summary>
+		/// Optional: Regex patterns to include project files. When specified, only project files whose
+		/// name matches at least one pattern are processed. Exclusion patterns still apply on top.
+		/// </summary>
+		public List<string> IncludeProjectPatterns { get; set; } = new();
+
+		/// <summary>
 		/// Optional: Whether to use case-sensitive matching for project file exclusions. Default is false
 		/// </summary>
 		public bool CaseSensitiveProjectFilters { get; set; } = false;

@@ -322,6 +322,17 @@ namespace NuGroom.Tests
 		}
 
 		[Test]
+		public void WhenIncludeProjectThenConfigContainsPattern()
+		{
+			var args = MinimalValidArgs.Concat(["--include-project", @".*\.Web\.csproj"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.Config.ShouldNotBeNull();
+			result.Config.IncludeProjectPatterns.ShouldContain(@".*\.Web\.csproj");
+		}
+
+		[Test]
 		public void WhenExcludeRepoThenConfigContainsPattern()
 		{
 			var args = MinimalValidArgs.Concat(["--exclude-repo", "Legacy-.*"]).ToArray();
@@ -1601,6 +1612,98 @@ namespace NuGroom.Tests
 			result.LocalPaths.ShouldNotBeNull();
 			result.UpdateConfig.ShouldNotBeNull();
 			result.UpdateConfig!.Scope.ShouldBe(UpdateScope.Minor);
+		}
+
+		[Test]
+		public void WhenPathsWithSyncThenSyncConfigIsCollected()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--sync", "Newtonsoft.Json", "13.0.3"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldNotBeNull();
+			result.SyncConfigs.Count.ShouldBe(1);
+			result.SyncConfigs[0].PackageName.ShouldBe("Newtonsoft.Json");
+			result.SyncConfigs[0].TargetVersion.ShouldBe("13.0.3");
+		}
+
+		[Test]
+		public void WhenPathsWithMigrateToCpmThenFlagIsTrue()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--migrate-to-cpm"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldNotBeNull();
+			result.MigrateToCpm.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenPathsWithExcludeProjectThenExcludeProjectPatternsIsSet()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--exclude-project", @".*\.Tests\.csproj"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldNotBeNull();
+			result.ExcludeProjectPatterns.ShouldNotBeNull();
+			result.ExcludeProjectPatterns!.Count.ShouldBe(1);
+			result.ExcludeProjectPatterns[0].ShouldBe(@".*\.Tests\.csproj");
+		}
+
+		[Test]
+		public void WhenPathsWithIncludeProjectThenIncludeProjectPatternsIsSet()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--include-project", @".*\.Web\.csproj"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldNotBeNull();
+			result.IncludeProjectPatterns.ShouldNotBeNull();
+			result.IncludeProjectPatterns!.Count.ShouldBe(1);
+			result.IncludeProjectPatterns[0].ShouldBe(@".*\.Web\.csproj");
+		}
+
+		[Test]
+		public void WhenPathsWithCaseSensitiveProjectThenFlagIsTrue()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--case-sensitive-project"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldNotBeNull();
+			result.CaseSensitiveProjectFilters.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenPathsWithMultipleIncludeProjectThenAllPatternsCollected()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--include-project", @".*\.Web\.csproj", "--include-project", @".*\.Api\.csproj"]);
+
+			result.IncludeProjectPatterns.ShouldNotBeNull();
+			result.IncludeProjectPatterns!.Count.ShouldBe(2);
+		}
+
+		[Test]
+		public void WhenPathsWithSyncAndMigrateToCpmThenReturnsError()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--sync", "Newtonsoft.Json", "13.0.3", "--migrate-to-cpm"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenPathsWithSyncAndUpdateReferencesThenReturnsError()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--sync", "Newtonsoft.Json", "13.0.3", "--update-references"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldBeNull();
+		}
+
+		[Test]
+		public void WhenPathsWithMigrateToCpmAndUpdateReferencesThenReturnsError()
+		{
+			var result = CommandLineParser.Parse(["--paths", _tempDir, "--migrate-to-cpm", "--update-references"]);
+
+			result.Config.ShouldBeNull();
+			result.LocalPaths.ShouldBeNull();
 		}
 	}
 }

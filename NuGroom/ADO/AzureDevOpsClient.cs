@@ -25,6 +25,7 @@ namespace NuGroom.ADO
 		private readonly ProjectHttpClient _projectClient;
 		private readonly AzureDevOpsConfig _config;
 		private readonly List<Regex> _excludeProjectRegexes; // precompiled project file exclusion patterns
+		private readonly List<Regex> _includeProjectRegexes; // precompiled project file inclusion patterns
 		private readonly List<Regex> _excludeRepoRegexes;    // precompiled repository exclusion patterns
 		private readonly List<Regex> _includeRepoRegexes;    // precompiled repository inclusion patterns
 
@@ -61,6 +62,29 @@ namespace NuGroom.ADO
 					if (_excludeProjectRegexes.Count > 0)
 					{
 						Logger.Debug($"Compiled {_excludeProjectRegexes.Count} project file exclusion pattern(s)");
+					}
+				}
+
+				// Precompile project file inclusion regex patterns once
+				_includeProjectRegexes = new List<Regex>();
+				if (_config.IncludeProjectPatterns != null && _config.IncludeProjectPatterns.Count > 0)
+				{
+					var includeOptions = _config.CaseSensitiveProjectFilters ? RegexOptions.Compiled : (RegexOptions.Compiled | RegexOptions.IgnoreCase);
+					foreach (var pattern in _config.IncludeProjectPatterns)
+					{
+						try 
+						{ 
+							_includeProjectRegexes.Add(new Regex(pattern, includeOptions, TimeSpan.FromSeconds(2))); 
+						}
+						catch (Exception ex) 
+						{ 
+							Logger.Warning($"Invalid include-project regex '{pattern}': {ex.Message}"); 
+						}
+					}
+
+					if (_includeProjectRegexes.Count > 0)
+					{
+						Logger.Debug($"Compiled {_includeProjectRegexes.Count} project file inclusion pattern(s)");
 					}
 				}
 
@@ -133,6 +157,32 @@ namespace NuGroom.ADO
 					return true;
 				}
 			}
+			return false;
+		}
+
+		/// <summary>
+		/// Determines whether a project file passes the inclusion filter.
+		/// When no include patterns are configured, all files pass. Otherwise the file name must match at least one.
+		/// </summary>
+		private bool IsIncludedProject(string path)
+		{
+			if (_includeProjectRegexes.Count == 0)
+			{
+				return true;
+			}
+
+			var fileName = Path.GetFileName(path);
+
+			foreach (var rx in _includeProjectRegexes)
+			{
+				if (rx.IsMatch(fileName))
+				{
+					return true;
+				}
+			}
+
+			Logger.Debug($"Skipping {fileName} (no include-project pattern matched)");
+
 			return false;
 		}
 
@@ -312,9 +362,9 @@ namespace NuGroom.ADO
 					recursionLevel: VersionControlRecursionType.Full,
 					versionDescriptor: versionDescriptor);
 
-				// Early filter: only supported project files and not excluded
+				// Early filter: only supported project files, not excluded, and matching include patterns
 				var projectFiles = items
-					.Where(item => !item.IsFolder && IsProjectFile(item.Path) && !IsExcludedProject(item.Path))
+					.Where(item => !item.IsFolder && IsProjectFile(item.Path) && !IsExcludedProject(item.Path) && IsIncludedProject(item.Path))
 					.ToList();
 
 				Logger.Debug($"Returning {projectFiles.Count} project file(s) after early exclusion filtering in repository {repository.Name}");

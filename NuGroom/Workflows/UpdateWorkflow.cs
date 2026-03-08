@@ -165,28 +165,35 @@ namespace NuGroom.Workflows
 
 			foreach (var fileUpdate in plan.FileUpdates)
 			{
-				var currentContent = await client.GetFileContentFromBranchAsync(
-						repository, fileUpdate.ProjectPath, sourceBranch.Value.RefName);
-
-				if (string.IsNullOrWhiteSpace(currentContent))
+				try
 				{
-					ConsoleWriter.Out.WriteLine($"  Warning: Could not read {fileUpdate.ProjectPath}, skipping.");
-					continue;
+					var currentContent = await client.GetFileContentFromBranchAsync(
+							repository, fileUpdate.ProjectPath, sourceBranch.Value.RefName);
+
+					if (string.IsNullOrWhiteSpace(currentContent))
+					{
+						ConsoleWriter.Out.WriteLine($"  Warning: Could not read {fileUpdate.ProjectPath}, skipping.");
+						continue;
+					}
+
+					var updatedContent = ApplyUpdatesBySourceKind(currentContent, fileUpdate);
+
+					// Apply version increments to project files (not to Directory.Packages.props or packages.config)
+					if (updatedContent != currentContent
+						&& fileUpdate.SourceKind == PackageSourceKind.ProjectFile
+						&& updateConfig.VersionIncrement is { IsEnabled: true })
+					{
+						updatedContent = ProjectVersionIncrementer.ApplyVersionIncrements(updatedContent, updateConfig.VersionIncrement);
+					}
+
+					if (updatedContent != currentContent)
+					{
+						fileChanges[fileUpdate.ProjectPath] = updatedContent;
+					}
 				}
-
-				var updatedContent = ApplyUpdatesBySourceKind(currentContent, fileUpdate);
-
-				// Apply version increments to project files (not to Directory.Packages.props or packages.config)
-				if (updatedContent != currentContent
-					&& fileUpdate.SourceKind == PackageSourceKind.ProjectFile
-					&& updateConfig.VersionIncrement is { IsEnabled: true })
+				catch (Exception ex)
 				{
-					updatedContent = ProjectVersionIncrementer.ApplyVersionIncrements(updatedContent, updateConfig.VersionIncrement);
-				}
-
-				if (updatedContent != currentContent)
-				{
-					fileChanges[fileUpdate.ProjectPath] = updatedContent;
+					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Failed to process {fileUpdate.ProjectPath}: {ex.Message}").ResetColor();
 				}
 			}
 

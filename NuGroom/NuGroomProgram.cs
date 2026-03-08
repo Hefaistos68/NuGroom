@@ -77,7 +77,15 @@ namespace NuGroom
 			{
 				ReportWorkflow.Execute(references, parseResult);
 
-				if (parseResult.UpdateConfig != null)
+				if (parseResult.SyncConfigs.Count > 0)
+				{
+					await LocalSyncWorkflow.ExecuteAsync(parseResult, references);
+				}
+				else if (parseResult.MigrateToCpm)
+				{
+					LocalCpmMigrationWorkflow.Execute(parseResult, references);
+				}
+				else if (parseResult.UpdateConfig != null)
 				{
 					LocalUpdateWorkflow.Execute(references, parseResult.UpdateConfig);
 				}

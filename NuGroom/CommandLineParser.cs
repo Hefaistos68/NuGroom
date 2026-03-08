@@ -29,7 +29,10 @@ namespace NuGroom
 		bool MigrateToCpm = false,
 		bool PerProject = false,
 		VulnerabilityConfig? VulnerabilityConfig = null,
-		List<string>? LocalPaths = null);
+		List<string>? LocalPaths = null,
+		List<string>? ExcludeProjectPatterns = null,
+		List<string>? IncludeProjectPatterns = null,
+		bool CaseSensitiveProjectFilters = false);
 
 	/// <summary>
 	/// Parses and validates command line arguments and optional configuration files
@@ -63,6 +66,7 @@ namespace NuGroom
 			public List<string> ExcludePackages { get; } = new();
 			public List<string> ExcludePatterns { get; } = new();
 			public List<string> ExcludeProjectPatterns { get; } = new();
+			public List<string> IncludeProjectPatterns { get; } = new();
 			public List<string> ExcludeRepositories { get; } = new();
 			public List<string> IncludeRepositories { get; } = new();
 			public bool? NoDefaultExclusions { get; set; }
@@ -287,6 +291,13 @@ namespace NuGroom
 						if (i + 1 < args.Length)
 						{
 							state.ExcludeProjectPatterns.Add(args[++i]);
+						}
+
+						break;
+					case "--include-project":
+						if (i + 1 < args.Length)
+						{
+							state.IncludeProjectPatterns.Add(args[++i]);
 						}
 
 						break;
@@ -856,6 +867,12 @@ namespace NuGroom
 				state.ExcludeProjectPatterns.AddRange(fileConfig.ExcludeProjectPatterns.Where(p => !state.ExcludeProjectPatterns.Contains(p)));
 			}
 
+			// CLI --include-project replaces config-file include patterns rather than merging
+			if (fileConfig.IncludeProjectPatterns?.Any() == true && state.IncludeProjectPatterns.Count == 0)
+			{
+				state.IncludeProjectPatterns.AddRange(fileConfig.IncludeProjectPatterns);
+			}
+
 			if (fileConfig.ExcludeRepositories?.Any() == true)
 			{
 				state.ExcludeRepositories.AddRange(fileConfig.ExcludeRepositories.Where(p => !state.ExcludeRepositories.Contains(p)));
@@ -1006,6 +1023,34 @@ namespace NuGroom
 				return CreateErrorParseResult(state, exclusionList);
 			}
 
+			if (state.LocalPaths.Count > 0)
+			{
+				var conflictingFlags = new List<string>();
+
+				if (state.SyncConfigs.Count > 0)
+				{
+					conflictingFlags.Add("--sync");
+				}
+
+				if (state.MigrateToCpm)
+				{
+					conflictingFlags.Add("--migrate-to-cpm");
+				}
+
+				if (state.UpdateConfig is { IsRequested: true })
+				{
+					conflictingFlags.Add("--update-references");
+				}
+
+				if (conflictingFlags.Count > 1)
+				{
+					Console.WriteLine($"Error: {string.Join(", ", conflictingFlags)} are mutually exclusive in local mode");
+					ShowHelp();
+
+					return CreateErrorParseResult(state, exclusionList);
+				}
+			}
+
 			return null;
 		}
 
@@ -1050,6 +1095,7 @@ namespace NuGroom
 					MaxRepositories = state.MaxRepos,
 					IncludeArchivedRepositories = state.IncludeArchived ?? false,
 					ExcludeProjectPatterns = state.ExcludeProjectPatterns,
+					IncludeProjectPatterns = state.IncludeProjectPatterns,
 					CaseSensitiveProjectFilters = state.CaseSensitiveProjectFilters ?? false,
 					ExcludeRepositories = state.ExcludeRepositories,
 					IncludeRepositories = state.IncludeRepositories
@@ -1089,7 +1135,10 @@ namespace NuGroom
 				MigrateToCpm: state.MigrateToCpm,
 				PerProject: state.PerProject,
 				VulnerabilityConfig: state.VulnerabilityConfig,
-				LocalPaths: state.LocalPaths.Count > 0 ? state.LocalPaths : null);
+				LocalPaths: state.LocalPaths.Count > 0 ? state.LocalPaths : null,
+				ExcludeProjectPatterns: state.ExcludeProjectPatterns.Count > 0 ? state.ExcludeProjectPatterns : null,
+				IncludeProjectPatterns: state.IncludeProjectPatterns.Count > 0 ? state.IncludeProjectPatterns : null,
+				CaseSensitiveProjectFilters: state.CaseSensitiveProjectFilters ?? false);
 		}
 
 		/// <summary>
@@ -1128,11 +1177,12 @@ namespace NuGroom
 			Console.WriteLine("  --export-sbom <path>         Export SPDX 3.0.0 SBOM (Software Bill of Materials) as JSON-LD");
 			Console.WriteLine();
 			Console.WriteLine("Exclusion Options:");
-			Console.WriteLine("  --exclude-prefix <prefix>    Exclude packages starting with prefix (e.g., Microsoft.)");
-			Console.WriteLine("  --exclude-package <name>     Exclude specific package by exact name");
-			Console.WriteLine("  --exclude-pattern <regex>    Exclude packages matching regex pattern");
-			Console.WriteLine("  --exclude-project <pattern>  Exclude project files matching regex pattern (.csproj, .vbproj, .fsproj)");
-			Console.WriteLine("  --exclude-repo <pattern>     Exclude repositories matching regex pattern (e.g., \"Legacy-.*\")");
+			Console.WriteLine("  --exclude-prefix <prefix>    Exclude packages starting with prefix (repeatable, e.g., Microsoft.)");
+			Console.WriteLine("  --exclude-package <name>     Exclude specific package by exact name (repeatable)");
+			Console.WriteLine("  --exclude-pattern <regex>    Exclude packages matching regex pattern (repeatable)");
+			Console.WriteLine("  --exclude-project <pattern>  Exclude project files matching regex pattern (repeatable)");
+			Console.WriteLine("  --include-project <pattern>  Include only project files matching regex pattern (repeatable)");
+			Console.WriteLine("  --exclude-repo <pattern>     Exclude repositories matching regex pattern (repeatable)");
 			Console.WriteLine("  --include-repo <pattern>     Include only repositories matching regex pattern (repeatable, processed in order)");
 			Console.WriteLine("  --no-default-exclusions      Don't exclude Microsoft.* and System.* by default");
 			Console.WriteLine("  --case-sensitive             Use case-sensitive package name matching");

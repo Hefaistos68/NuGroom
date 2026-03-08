@@ -36,9 +36,10 @@ namespace NuGroom.Workflows
 			ConsoleWriter.Out.WriteLine("Local scan mode");
 			ConsoleWriter.Out.WriteLine($"Scanning {localPaths.Count} path(s)...").WriteLine();
 
-			var excludeProjectRegexes = BuildProjectExclusionRegexes();
+			var excludeProjectRegexes = BuildProjectRegexes(parseResult.ExcludeProjectPatterns, parseResult.CaseSensitiveProjectFilters);
+			var includeProjectRegexes = BuildProjectRegexes(parseResult.IncludeProjectPatterns, parseResult.CaseSensitiveProjectFilters);
 
-			var projectFiles = DiscoverProjectFiles(localPaths, excludeProjectRegexes, parseResult.IncludePackagesConfig);
+			var projectFiles = DiscoverProjectFiles(localPaths, excludeProjectRegexes, includeProjectRegexes, parseResult.IncludePackagesConfig);
 			var allFiles = projectFiles.ProjectFiles;
 			var managementFiles = projectFiles.ManagementFiles;
 
@@ -115,12 +116,33 @@ namespace NuGroom.Workflows
 		}
 
 		/// <summary>
-		/// Builds a list of precompiled exclusion regexes for project file paths.
-		/// Currently returns an empty list; project-file exclusion patterns are not supported in local mode.
+		/// Compiles a list of regex patterns for project file matching.
 		/// </summary>
-		private static List<Regex> BuildProjectExclusionRegexes()
+		private static List<Regex> BuildProjectRegexes(List<string>? patterns, bool caseSensitive)
 		{
-			return new List<Regex>();
+			if (patterns == null || patterns.Count == 0)
+			{
+				return new List<Regex>();
+			}
+
+			var options = caseSensitive
+				? RegexOptions.Compiled
+				: RegexOptions.Compiled | RegexOptions.IgnoreCase;
+			var result = new List<Regex>();
+
+			foreach (var pattern in patterns)
+			{
+				try
+				{
+					result.Add(new Regex(pattern, options, TimeSpan.FromSeconds(2)));
+				}
+				catch (ArgumentException ex)
+				{
+					ConsoleWriter.Out.Yellow().WriteLine($"Warning: Invalid project regex pattern '{pattern}': {ex.Message}").ResetColor();
+				}
+			}
+
+			return result;
 		}
 
 		/// <summary>
@@ -130,6 +152,7 @@ namespace NuGroom.Workflows
 		private static LocalFiles DiscoverProjectFiles(
 			List<string> paths,
 			List<Regex> excludeProjectRegexes,
+			List<Regex> includeProjectRegexes,
 			bool includePackagesConfig)
 		{
 			var projectFiles = new List<FileInfo>();
@@ -143,11 +166,11 @@ namespace NuGroom.Workflows
 
 				if (Directory.Exists(fullPath))
 				{
-					CollectFilesFromDirectory(fullPath, projectFiles, managementFiles, excludeProjectRegexes, includePackagesConfig, visited);
+					CollectFilesFromDirectory(fullPath, projectFiles, managementFiles, excludeProjectRegexes, includeProjectRegexes, includePackagesConfig, visited);
 				}
 				else if (File.Exists(fullPath))
 				{
-					AddSingleFile(new FileInfo(fullPath), projectFiles, managementFiles, excludeProjectRegexes, includePackagesConfig, visited);
+					AddSingleFile(new FileInfo(fullPath), projectFiles, managementFiles, excludeProjectRegexes, includeProjectRegexes, includePackagesConfig, visited);
 				}
 				else
 				{
@@ -166,6 +189,7 @@ namespace NuGroom.Workflows
 			List<FileInfo> projectFiles,
 			List<FileInfo> managementFiles,
 			List<Regex> excludeProjectRegexes,
+			List<Regex> includeProjectRegexes,
 			bool includePackagesConfig,
 			HashSet<string> visited)
 		{
@@ -174,7 +198,7 @@ namespace NuGroom.Workflows
 				foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
 				{
 					var info = new FileInfo(file);
-					AddSingleFile(info, projectFiles, managementFiles, excludeProjectRegexes, includePackagesConfig, visited);
+					AddSingleFile(info, projectFiles, managementFiles, excludeProjectRegexes, includeProjectRegexes, includePackagesConfig, visited);
 				}
 			}
 			catch (Exception ex)
@@ -191,6 +215,7 @@ namespace NuGroom.Workflows
 			List<FileInfo> projectFiles,
 			List<FileInfo> managementFiles,
 			List<Regex> excludeProjectRegexes,
+			List<Regex> includeProjectRegexes,
 			bool includePackagesConfig,
 			HashSet<string> visited)
 		{
@@ -199,7 +224,7 @@ namespace NuGroom.Workflows
 				return;
 			}
 
-			if (IsProjectFile(file.Name) && !IsExcludedProject(file.Name, excludeProjectRegexes))
+			if (IsProjectFile(file.Name) && !IsExcludedProject(file.Name, excludeProjectRegexes) && IsIncludedProject(file.Name, includeProjectRegexes))
 			{
 				projectFiles.Add(file);
 			}
@@ -522,6 +547,30 @@ namespace NuGroom.Workflows
 					return true;
 				}
 			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// Determines whether a file passes the inclusion filter. When no include patterns
+		/// are configured, all files pass. Otherwise the file name must match at least one pattern.
+		/// </summary>
+		private static bool IsIncludedProject(string fileName, List<Regex> includeRegexes)
+		{
+			if (includeRegexes.Count == 0)
+			{
+				return true;
+			}
+
+			foreach (var rx in includeRegexes)
+			{
+				if (rx.IsMatch(fileName))
+				{
+					return true;
+				}
+			}
+
+			Logger.Debug($"Skipping {fileName} (no include pattern matched)");
 
 			return false;
 		}

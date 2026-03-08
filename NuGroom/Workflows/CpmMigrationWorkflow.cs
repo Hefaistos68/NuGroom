@@ -23,7 +23,7 @@ namespace NuGroom.Workflows
 		/// </param>
 		/// <param name="updateConfig">
 		/// Optional update configuration for branching, dry-run, and PR settings.
-		/// When <c>null</c>, defaults to dry-run mode.
+		/// When <c>null</c>, changes are applied. Use <c>--dry-run</c> to preview.
 		/// </param>
 		public static async Task ExecuteAsync(
 			AzureDevOpsConfig config,
@@ -34,7 +34,9 @@ namespace NuGroom.Workflows
 			ArgumentNullException.ThrowIfNull(config);
 			ArgumentNullException.ThrowIfNull(references);
 
-			var isDryRun = updateConfig?.DryRun ?? true;
+			var effectiveUpdateConfig = UpdateConfig.GetEffective(updateConfig);
+
+			var isDryRun = effectiveUpdateConfig.DryRun;
 
 			// Filter to only references with explicit versions from project files
 			var eligibleRefs = references
@@ -104,15 +106,22 @@ namespace NuGroom.Workflows
 
 			foreach (var projectFile in projectFiles)
 			{
-				var content = await client.GetFileContentFromBranchAsync(repository, projectFile.Path, sourceBranch.Value.RefName);
+				try
+				{
+					var content = await client.GetFileContentFromBranchAsync(repository, projectFile.Path, sourceBranch.Value.RefName);
 
-				if (!string.IsNullOrWhiteSpace(content))
-				{
-					projectContents[projectFile.Path] = content;
+					if (!string.IsNullOrWhiteSpace(content))
+					{
+						projectContents[projectFile.Path] = content;
+					}
+					else
+					{
+						ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Could not read {projectFile.Path}, skipping.").ResetColor();
+					}
 				}
-				else
+				catch (Exception ex)
 				{
-					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Could not read {projectFile.Path}, skipping.").ResetColor();
+					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Failed to read {projectFile.Path}: {ex.Message}").ResetColor();
 				}
 			}
 
@@ -327,13 +336,20 @@ namespace NuGroom.Workflows
 					continue;
 				}
 
-				var content = await client.GetFileContentFromBranchAsync(repository, propsFile.Path, branchRefName);
-
-				if (!string.IsNullOrWhiteSpace(content))
+				try
 				{
-					var key = propsFile.Path.TrimStart('/');
-					result[key] = content;
-					Logger.Info($"  Found existing {key}");
+					var content = await client.GetFileContentFromBranchAsync(repository, propsFile.Path, branchRefName);
+
+					if (!string.IsNullOrWhiteSpace(content))
+					{
+						var key = propsFile.Path.TrimStart('/');
+						result[key] = content;
+						Logger.Info($"  Found existing {key}");
+					}
+				}
+				catch (Exception ex)
+				{
+					ConsoleWriter.Out.Yellow().WriteLine($"  Warning: Failed to read {propsFile.Path}: {ex.Message}").ResetColor();
 				}
 			}
 
