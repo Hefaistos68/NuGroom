@@ -202,6 +202,7 @@ namespace NuGroom.Workflows
 
 			if (!references.Any(r => r.NuGetInfo is { IsVulnerable: true }))
 			{
+				ConsoleWriter.Out.Green().WriteLine($"No vulnerabilities to report.").ResetColor();
 				return;
 			}
 

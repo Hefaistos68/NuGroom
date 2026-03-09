@@ -481,6 +481,19 @@ namespace NuGroom.Tests
 			var result = CommandLineParser.Parse(args);
 
 			result.UpdateConfig.ShouldNotBeNull();
+          result.UpdateConfig.IsRequested.ShouldBeFalse();
+			result.UpdateConfig.DryRun.ShouldBeTrue();
+		}
+
+		[Test]
+		public void WhenDryRunWithBranchOptionsButNoUpdateReferencesThenUpdateIsNotRequested()
+		{
+			var args = MinimalValidArgs.Concat(["--dry-run", "--source-branch", "master", "--target-branch", "master"]).ToArray();
+
+			var result = CommandLineParser.Parse(args);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.IsRequested.ShouldBeFalse();
 			result.UpdateConfig.DryRun.ShouldBeTrue();
 		}
 
@@ -626,6 +639,26 @@ namespace NuGroom.Tests
 		}
 
 		[Test]
+		public void WhenConfigFileDryRunTrueAndSyncSpecifiedThenDryRunIsPreserved()
+		{
+			var configPath = Path.Combine(Path.GetTempPath(), $"nugroom-test-{Guid.NewGuid()}.json");
+			var config = new ToolConfig
+			{
+				Organization = "https://dev.azure.com/org",
+				Token        = "token",
+				Update       = new UpdateConfig { DryRun = true }
+			};
+			File.WriteAllText(configPath, JsonSerializer.Serialize(config));
+
+			var result = CommandLineParser.Parse([
+				"--config", configPath,
+				"--sync", "Newtonsoft.Json", "13.0.3"]);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.DryRun.ShouldBeTrue();
+		}
+
+		[Test]
 		public void WhenMultipleSyncsThenAllAreAdded()
 		{
 			var args = MinimalValidArgs.Concat(
@@ -758,6 +791,28 @@ namespace NuGroom.Tests
 		}
 
 		[Test]
+		public void WhenConfigFileSetsIsRequestedThenCliIntentStillRequired()
+		{
+			var configPath = Path.Combine(Path.GetTempPath(), $"nugroom-test-{Guid.NewGuid()}.json");
+			var config = new ToolConfig
+			{
+				Organization = "https://dev.azure.com/org",
+				Token        = "token",
+				Update       = new UpdateConfig
+				{
+					IsRequested = true,
+					DryRun      = false
+				}
+			};
+			File.WriteAllText(configPath, JsonSerializer.Serialize(config));
+
+			var result = CommandLineParser.Parse(["--config", configPath]);
+
+			result.UpdateConfig.ShouldNotBeNull();
+			result.UpdateConfig.IsRequested.ShouldBeFalse();
+		}
+
+		[Test]
 		public void WhenConfigFileHasFeedAuthThenAuthIsMerged()
 		{
 			var configPath = Path.Combine(Path.GetTempPath(), $"nugroom-test-{Guid.NewGuid()}.json");
@@ -857,11 +912,30 @@ namespace NuGroom.Tests
 				["--config", configPath, "--dry-run"]);
 
 			result.UpdateConfig.ShouldNotBeNull();
-			result.UpdateConfig.DryRun.ShouldBeTrue();
-		}
+				result.UpdateConfig.DryRun.ShouldBeTrue();
+			}
 
-		[Test]
-		public void WhenConfigFileCliUpdateScopeOverridesFileScope()
+          [Test]
+          public void WhenConfigFileDryRunTrueAndCliUpdateReferencesThenDryRunIsStillTrue()
+			{
+				var configPath = Path.Combine(Path.GetTempPath(), $"nugroom-test-{Guid.NewGuid()}.json");
+				var config = new ToolConfig
+				{
+					Organization = "https://dev.azure.com/org",
+					Token        = "token",
+					Update       = new UpdateConfig { DryRun = true, Scope = UpdateScope.Minor }
+				};
+				File.WriteAllText(configPath, JsonSerializer.Serialize(config));
+
+				var result = CommandLineParser.Parse(
+					["--config", configPath, "--update-references"]);
+
+				result.UpdateConfig.ShouldNotBeNull();
+               result.UpdateConfig.DryRun.ShouldBeTrue();
+			}
+
+			[Test]
+			public void WhenConfigFileCliUpdateScopeOverridesFileScope()
 		{
 			var configPath = Path.Combine(Path.GetTempPath(), $"nugroom-test-{Guid.NewGuid()}.json");
 			var config = new ToolConfig
@@ -1589,7 +1663,7 @@ namespace NuGroom.Tests
 
 			result.LocalPaths.ShouldNotBeNull();
 			result.UpdateConfig.ShouldNotBeNull();
-			result.UpdateConfig!.IsRequested.ShouldBeTrue();
+            result.UpdateConfig!.IsRequested.ShouldBeFalse();
 			result.UpdateConfig.DryRun.ShouldBeTrue();
 		}
 

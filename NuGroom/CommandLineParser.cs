@@ -415,12 +415,11 @@ namespace NuGroom
 						i++;
 						break;
 					case "--update-references":
-						var updateRefsConfig = EnsureUpdateConfig(state, markRequested: true);
-						updateRefsConfig.DryRun = false;
-						state.DryRunExplicit = true;
-						break;
+							var updateRefsConfig = EnsureUpdateConfig(state, markRequested: true);
+							updateRefsConfig.DryRun = false;
+							break;
 					case "--dry-run":
-						var dryRunConfig = EnsureUpdateConfig(state, markRequested: true);
+                      var dryRunConfig = EnsureUpdateConfig(state);
 						dryRunConfig.DryRun = true;
 						state.RequestedDryRun = true;
 						state.DryRunExplicit = true;
@@ -770,6 +769,7 @@ namespace NuGroom
 			if (state.UpdateConfig == null && fileConfig.Update != null)
 			{
 				state.UpdateConfig = fileConfig.Update;
+               state.UpdateConfig.IsRequested = false;
 			}
 			else if (state.UpdateConfig != null && fileConfig.Update != null)
 			{
