@@ -1,4 +1,4 @@
-﻿# NuGroom - Find, list and update packages
+﻿# NuGroom - Nuget package inventory and grooming
 
 A command-line tool that connects to Azure DevOps, searches all repositories for C#, Visual Basic and F# project files, extracts PackageReference lines, and provides comprehensive package analysis including **multi-feed NuGet package information resolution with PAT authentication**.
 
